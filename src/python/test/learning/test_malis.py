@@ -7,7 +7,7 @@ import numpy as np
 class TestMalis(unittest.TestCase):
 
     def test_malis_2d(self):
-        import affogato.affinities import compute_affinities
+        from affogato.affinities import compute_affinities
         from affogato.learning import compute_malis_2d
         shape = (100, 100)
         labels = np.random.randint(0, 100, size=shape)
@@ -21,7 +21,7 @@ class TestMalis(unittest.TestCase):
         self.assertFalse(np.allclose(grads, 0))
 
     def test_malis_3d(self):
-        import affogato.affinities import compute_affinities
+        from affogato.affinities import compute_affinities
         from affogato.learning import compute_malis_3d
         shape = (100, 100, 100)
         labels = np.random.randint(0, 1000, size=shape)

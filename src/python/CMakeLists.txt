@@ -8,7 +8,6 @@ find_package(NUMPY REQUIRED)
 include_directories(${PYTHON_NUMPY_INCLUDE_DIR})
 
 
-add_subdirectory(test)
 add_subdirectory(lib)
 
 

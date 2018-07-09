@@ -95,9 +95,6 @@ include(pybind11Tools)
 
 # numpy
 set(PYBIND11_CPP_STANDARD -std=c++14)
-find_package(NumPy REQUIRED)
-include_directories(${NUMPY_INCLUDE_DIRS})
-message(STATUS "Using numpy from ${NUMPY_INCLUDE_DIRS}")
 
 
 ###############################

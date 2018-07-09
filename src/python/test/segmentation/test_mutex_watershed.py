@@ -1,6 +1,5 @@
 import unittest
 import numpy as np
-import mutex_watershed
 
 
 class TestMutexWatershed(unittest.TestCase):
