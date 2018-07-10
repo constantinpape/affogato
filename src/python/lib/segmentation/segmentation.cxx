@@ -31,7 +31,8 @@ PYBIND11_MODULE(_segmentation, m)
     }, py::arg("affinities"),
        py::arg("threshold")
     );
-    
+
+
     m.def("compute_mws_clustering",[](const uint64_t number_of_labels,
                                       const xt::pytensor<uint64_t, 2> & uvs,
                                       const xt::pytensor<uint64_t, 2> & mutex_uvs,
