@@ -54,6 +54,7 @@ namespace learning {
                 ++nNodesLabeled;
                 nPairPos += (segmentSizes[gtId] - 1);
             }
+            sets.make_set(nodeIndex);
             ++nodeIndex;
         });
 
