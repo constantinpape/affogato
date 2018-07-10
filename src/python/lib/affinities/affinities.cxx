@@ -63,8 +63,8 @@ PYBIND11_MODULE(_affinities, m)
             }
 
             // allocate the output
-            xt::pyarray<float> affs(out_shape);
-            xt::pyarray<uint8_t> mask(out_shape);
+            xt::pyarray<float> affs = xt::zeros<float>(out_shape);
+            xt::pyarray<uint8_t> mask = xt::zeros<uint8_t>(out_shape);
             {
                 py::gil_scoped_release allowThreads;
                 affinities::compute_affinities(labels, offsets,
