@@ -19,7 +19,6 @@ namespace learning {
                           xt::xexpression<GRADS> & grads_exp,
                           const std::vector<std::vector<int>> & offsets,
                           const bool pos) {
-        std::cout << "Here "<< std::endl;
         const auto & affs = affs_exp.derived_cast();
         const auto & gt = gt_exp.derived_cast();
         auto & grads = grads_exp.derived_cast();
@@ -48,7 +47,6 @@ namespace learning {
 
         // initialize sets, overlaps and find labeled pixels
         size_t nNodesLabeled = 0, nPairPos = 0, nodeIndex = 0;
-        std::cout << "Initialize "<< std::endl;
         util::for_each_coordinate(shape, [&](const xt::xindex & coord){
             const auto gtId = gt[coord];
             if(gtId != 0) {
@@ -60,7 +58,6 @@ namespace learning {
             sets.make_set(nodeIndex);
             ++nodeIndex;
         });
-        std::cout << "Initialize done"<< std::endl;
 
         // compute normalisation
         const size_t nPairNorm = pos ? nPairPos : nNodesLabeled * (nNodesLabeled - 1) / 2 - nPairPos;
@@ -89,7 +86,6 @@ namespace learning {
         xt::xindex gtCoordU(gt.size()), gtCoordV(gt.size());
 
         double loss = 0;
-        std::cout << "Start mst" << std::endl;
         // iterate over the queue
         for(const auto edgeId : pqueue) {
             // translate edge id to coordinate
@@ -127,7 +123,6 @@ namespace learning {
             // check if the nodes are not merged yet
             if(setU != setV) {
 
-                std::cout << "Merge edge " << edgeId << std::endl;
                 // merge nodes
                 // sets.link(nodeU, nodeV);
                 sets.link(setU, setV);
@@ -137,7 +132,6 @@ namespace learning {
                 const AffType aff = affs[affCoord];
                 const GradType grad = pos ? 1. - aff : -aff;
 
-                std::cout << "Build gradient" << std::endl;
                 // compute the number of node pairs merged by this edge
                 for(auto itU = overlaps[setU].begin(); itU != overlaps[setU].end(); ++itU) {
                     for(auto itV = overlaps[setV].begin(); itV != overlaps[setV].end(); ++itV) {
@@ -154,18 +148,15 @@ namespace learning {
                     }
                 }
                 grads[affCoord] += currentGradient / nPairNorm;
-                std::cout << "Build gradient done" << std::endl;
 
                 if(sets.find_set(setU) == setV) {
                     std::swap(setU, setV);
                 }
 
-                std::cout << "Switch overlaps" << std::endl;
                 auto & overlapsU = overlaps[setU];
                 auto & overlapsV = overlaps[setV];
                 auto itV = overlapsV.begin();
                 while(itV != overlapsV.end()) {
-                    std::cout << "Switch for " << itV->first << std::endl;
                     auto itU = overlapsU.find(itV->first);
                     if(itU == overlapsU.end()) {
                         overlapsU.insert(std::make_pair(itV->first, itV->second));
@@ -175,8 +166,6 @@ namespace learning {
                     overlapsV.erase(itV);
                     ++itV;
                 }
-                std::cout << "Switch overlaps done" << std::endl;
-                std::cout << "Merge edge " << edgeId << " done" << std::endl;
             }
         }
         return loss / nPairNorm;
