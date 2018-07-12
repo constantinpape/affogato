@@ -5,7 +5,7 @@ find_package(pybind11 REQUIRED)
 include_directories(${pybind11_INCLUDE_DIRS})
 
 find_package(NUMPY REQUIRED)
-include_directories(${PYTHON_NUMPY_INCLUDE_DIR})
+include_directories(${NUMPY_INCLUDE_DIRS})
 
 
 add_subdirectory(lib)
