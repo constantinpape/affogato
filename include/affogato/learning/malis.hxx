@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <map>
 
 #include "boost/pending/disjoint_sets.hpp"
 #include "xtensor/xtensor.hpp"
@@ -41,7 +42,7 @@ namespace learning {
 
         // data structures for overlaps of nodes (= pixels) with gt labels
         // and sizes of gt segments
-        std::vector<std::unordered_map<LabelType, size_t>> overlaps(nNodes);
+        std::vector<std::map<LabelType, size_t>> overlaps(nNodes);
         std::unordered_map<LabelType, size_t> segmentSizes;
 
         // initialize sets, overlaps and find labeled pixels

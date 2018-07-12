@@ -25,7 +25,7 @@ class TestMalis(unittest.TestCase):
         from affogato.learning import compute_malis_3d
         shape = (100, 100, 100)
         labels = np.random.randint(0, 1000, size=shape)
-        offsets = [[-1, 0], [0, -1]]
+        offsets = [[-1, 0, 0], [0, -1, 0], [0, 0, -1]]
         affs, _ = compute_affinities(labels, offsets)
         affs += 0.1 * np.random.randn(*affs.shape)
         loss, grads = compute_malis_3d(affs, labels, offsets)

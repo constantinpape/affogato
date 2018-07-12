@@ -74,6 +74,6 @@ PYBIND11_MODULE(_affinities, m)
             return std::make_pair(affs, mask);
         }, py::arg("labels"),
            py::arg("offset"),
-           py::arg("haveIgnoreLabel")=false,
-           py::arg("ignoreLabel")=0);
+           py::arg("have_ignore_label")=false,
+           py::arg("ignore_label")=0);
 }
