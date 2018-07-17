@@ -21,9 +21,9 @@ PYBIND11_MODULE(_learning, m)
                                  const xt::pytensor<uint64_t, 2> & labels,
                                  const std::vector<std::vector<int>> & offsets) {
         //
-        const auto & affShape = affinities.shape();
+        const auto & aff_shape = affinities.shape();
         double loss;
-        xt::pytensor<float, 3> gradients(affShape);
+        xt::pytensor<float, 3> gradients = xt::zeros<float>(aff_shape);
         {
             py::gil_scoped_release allowThreads;
             loss = learning::constrained_malis(affinities, labels, gradients, offsets);
@@ -37,9 +37,9 @@ PYBIND11_MODULE(_learning, m)
                                  const xt::pytensor<uint64_t, 3> & labels,
                                  const std::vector<std::vector<int>> & offsets) {
         //
-        const auto & affShape = affinities.shape();
+        const auto & aff_shape = affinities.shape();
         double loss;
-        xt::pytensor<float, 4> gradients(affShape);
+        xt::pytensor<float, 4> gradients = xt::zeros<float>(aff_shape);
         {
             py::gil_scoped_release allowThreads;
             loss = learning::constrained_malis(affinities, labels, gradients, offsets);
