@@ -38,6 +38,21 @@ class TestMutexWatershed(unittest.TestCase):
                                              edge_weights, mutex_weights)
         self.assertEqual(len(node_labels), number_of_labels)
 
+    # test mutex watershed segmentation
+    # with random edges and random mutex edges
+    def test_mws_segmentation_random_weights(self):
+        from affogato.segmentation import compute_mws_segmentation
+
+        number_of_attractive_channels = 2
+        offsets = [[-1, 0], [0, -1], [-3, 0], [0, 3], [5, 5]]
+        weights = np.random.rand(len(offsets), 100, 100)
+
+        # compute mutex labeling
+        node_labels = compute_mws_segmentation(number_of_attractive_channels,
+                                               offsets,
+                                               weights)
+        self.assertEqual(weights.shape[1:], node_labels.shape)
+
 
 if __name__ == '__main__':
     unittest.main()

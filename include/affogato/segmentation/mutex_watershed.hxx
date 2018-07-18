@@ -207,5 +207,111 @@ namespace segmentation {
         }
     }
 
+    template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
+    void compute_mws_segmentation(const size_t number_of_attractive_channels,
+                                const std::vector<std::vector<int>> & offsets,
+                                const std::vector<int> & image_shape,
+                                const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
+                                const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
+                                xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
+
+        // casts
+        const auto & sorted_flat_indices = sorted_flat_indices_exp.derived_cast();
+        const auto & valid_edges = valid_edges_exp.derived_cast();
+        auto & node_labeling = node_labeling_exp.derived_cast();
+
+
+        const size_t number_of_nodes = node_labeling.size();
+        const size_t number_of_attractive_edges = number_of_nodes * number_of_attractive_channels;
+        const size_t number_of_offsets = offsets.size();
+        const size_t ndims = offsets[0].size();
+
+
+        std::vector<int64_t> array_stride(ndims);
+        int64_t current_stride = 1;
+        for (int i = ndims-1; i >= 0; --i){
+            array_stride[i] = current_stride;
+            current_stride *= image_shape[i];
+        }
+
+        std::vector<int64_t> offset_strides;
+        for (const auto & offset: offsets){
+            int64_t stride = 0;
+            for (int i = 0; i < offset.size(); ++i){
+                stride += offset[i] * array_stride[i];
+            }           
+            offset_strides.push_back(stride);
+        }
+
+        // make ufd
+        std::vector<uint64_t> ranks(number_of_nodes);
+        std::vector<uint64_t> parents(number_of_nodes);
+        boost::disjoint_sets<uint64_t*, uint64_t*> ufd(&ranks[0], &parents[0]);
+        for(uint64_t label = 0; label < number_of_nodes; ++label) {
+            ufd.make_set(label);
+        }
+
+        MutexStorage mutexes(number_of_nodes);
+
+        // iterate over all edges
+        for(const size_t edge_id : sorted_flat_indices) {
+
+            if (not valid_edges(edge_id)) continue;
+
+            // check whether this edge is mutex via the edge offset
+            const bool is_mutex = edge_id >= number_of_attractive_edges;
+
+            // get nodes connected by edge of edge_id
+
+            // const auto affCoord_ = xt::unravel_from_strides(edge_id, strides, layout);
+            uint64_t u = edge_id % number_of_nodes;
+            uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+
+            if(is_mutex) {
+
+                // find the current representatives
+                const uint64_t ru = ufd.find_set(u);
+                const uint64_t rv = ufd.find_set(v);
+
+                // if the nodes are already connected, do nothing
+                if(ru == rv) {
+                    continue;
+                }
+
+                // otherwise, insert the mutex
+                insert_mutex(u, v, rv, ufd, mutexes);
+                insert_mutex(v, u, ru, ufd, mutexes);
+
+            } else {
+
+                // find the current representatives
+                const uint64_t ru = ufd.find_set(u);
+                const uint64_t rv = ufd.find_set(v);
+
+                // if the nodes are already connected, do nothing
+                if(ru == rv) {
+                    continue;
+                }
+
+                // otherwise, check if we have an active constraint / mutex edge
+                const bool have_mutex = check_mutex(u, rv, ufd, mutexes) || check_mutex(v, ru, ufd, mutexes);
+                //const bool have_mutex = check_mutex_edge(u, v, mutexes);
+
+                // only merge if we don't have a mutex
+                if(!have_mutex) {
+                    ufd.link(u, v);
+                    merge_mutexes(u, v, ufd, mutexes);
+                }
+
+            }
+        }
+
+        // get node labeling into output
+        for(size_t label = 0; label < number_of_nodes; ++label) {
+            node_labeling[label] = ufd.find_set(label);
+        }
+    }
+
+
 }
 }
