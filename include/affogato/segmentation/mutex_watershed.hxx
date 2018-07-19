@@ -8,109 +8,83 @@ namespace affogato {
 namespace segmentation {
 
     // the datastructure to hold the mutex edges for a single cluster and all clusters
-    typedef std::unordered_set<uint64_t> MutexSet;
-    typedef std::vector<MutexSet> MutexStorage;
+    // typedef std::unordered_set<uint64_t> MutexSet;
+    // typedef std::vector<MutexSet> MutexStorage;
     typedef std::tuple<float, uint64_t, uint64_t, uint64_t> PQElement;
     auto pq_compare = [](PQElement left, PQElement right) { return std::get<0>(left) < std::get<0>(right);};
     // typedef std::priority_queue<> EdgePriorityQueue;
     typedef std::priority_queue<PQElement, std::vector<PQElement>, decltype(pq_compare)> EdgePriorityQueue;
     typedef boost::disjoint_sets<uint64_t*, uint64_t*> NodeUnionFind;
 
-    template<class UFD>
-    inline bool check_mutex(const uint32_t u, const uint32_t rv,
-                            UFD & ufd, const MutexStorage & mutexes) {
-        // the mutex storages are symmetric, so we only need to check one of them
-        const auto & mutex_u = mutexes[u];
-        bool have_mutex = false;
-        // we check for all representatives of mutex edges if
-        // they are the same as the reperesentative of v
-        for(const auto mu : mutex_u) {
-            if(ufd.find_set(mu) == rv) {
-                have_mutex = true;
-                break;
+    // template<class UFD>
+    // inline bool check_mutex(const uint32_t u, const uint32_t rv,
+    //                         UFD & ufd, const MutexStorage & mutexes) {
+    //     // the mutex storages are symmetric, so we only need to check one of them
+    //     const auto & mutex_u = mutexes[u];
+    //     bool have_mutex = false;
+    //     // we check for all representatives of mutex edges if
+    //     // they are the same as the reperesentative of v
+    //     for(const auto mu : mutex_u) {
+    //         if(ufd.find_set(mu) == rv) {
+    //             have_mutex = true;
+    //             break;
+
+
+    typedef std::vector<std::vector<uint64_t>> MutexStorage;
+
+    inline bool check_mutex(const uint64_t ru, const uint64_t rv,
+                            const MutexStorage & mutexes) {
+        // get iterators to the mutex vectors of rep u and rep v
+        auto mutex_it_u = mutexes[ru].begin();
+        auto mutex_it_v = mutexes[rv].begin();
+
+        // check if the mutex vectors contain the same mutex edge
+        while (mutex_it_u != mutexes[ru].end() && mutex_it_v != mutexes[rv].end()) {
+            if (*mutex_it_u < *mutex_it_v) {
+                ++mutex_it_u;
+            } else  {
+                if (!(*mutex_it_v < *mutex_it_u)) {
+                    return true;
+                }
+                ++mutex_it_v;
             }
         }
-        return have_mutex;
+        return false;
     }
 
 
-    template<class UFD>
-    inline void insert_mutex(const uint32_t u, const uint32_t v, const uint32_t rv,
-                             UFD & ufd, MutexStorage & mutexes) {
-
-        auto & mutex_u = mutexes[u];
-        // if we don't have a mutex yet, insert it
-        if(mutex_u.size() == 0) {
-            mutex_u.insert(v);
-        }
-
-        // otherwise check if v is already in the mutexes
-        // and filter the mutexes in the process
-        else {
-
-            bool have_mutex = false;
-            std::unordered_set<uint32_t> mutex_representatives;
-
-            // iterate over all current mutexes
-            auto mutex_it = mutex_u.begin();
-            while(mutex_it != mutex_u.end()) {
-                const uint32_t rm = ufd.find_set(*mutex_it);
-
-                // check if this mutex is already present in the list
-                // if it is not, insert it, otherwise delete this mutex
-                if(mutex_representatives.find(rm) == mutex_representatives.end()) {
-                    mutex_representatives.insert(rm);
-                    ++mutex_it;  // we don't erase, so we need to increase by hand
-                } else {
-                    mutex_it = mutex_u.erase(mutex_it);
-                }
-
-                // if we have not already found v as mutex, check for it
-                if(!have_mutex) {
-                    have_mutex = rv == rm;
-                }
-            }
-
-            // insert the v mutex if it is not present
-            if(!have_mutex) {
-                // std::cout << "Inserting mutex " << u << " " << v << std::endl;
-                mutex_u.insert(v);
-            }
+    // insert 'mutex_edge_id' into the vectors containing mutexes of 'ru' and 'rv'
+    inline void insert_mutex(const uint64_t ru, const uint64_t rv,
+                             const uint64_t mutex_edge_id, MutexStorage & mutexes) {
+        // in order to keep the mutex vectors handy, we only insert the mutex edge,
+        // if the two sets don't share a mutex yet
+        if (!check_mutex(ru, rv, mutexes)){
+            mutexes[ru].insert(std::upper_bound(mutexes[ru].begin(), mutexes[ru].end(), mutex_edge_id), mutex_edge_id);
+            mutexes[rv].insert(std::upper_bound(mutexes[rv].begin(), mutexes[rv].end(), mutex_edge_id), mutex_edge_id);
         }
     }
 
 
-    template<class UFD>
-    inline void merge_mutexes(const uint32_t u, const uint32_t v,
-                              UFD & ufd, MutexStorage & mutexes) {
-        auto & mutex_u = mutexes[u];
-        auto & mutex_v = mutexes[v];
-
-        // extract all representatives (which should be unique here)
-        std::unordered_map<uint32_t, uint32_t> mutex_reps_u;
-        for(const auto mu : mutex_u) {
-            mutex_reps_u[ufd.find_set(mu)] = mu;
+    // merge the mutex edges by merging from 'root_from' to 'root_to'
+    inline void merge_mutexes(const uint64_t root_from, const uint64_t root_to, MutexStorage & mutexes) {
+        if (mutexes[root_from].size() == 0) {
+            return;
         }
 
-        std::unordered_map<uint32_t, uint32_t> mutex_reps_v;
-        for(const auto mv : mutex_v) {
-            mutex_reps_v[ufd.find_set(mv)] = mv;
+        if (mutexes[root_to].size() == 0){
+            mutexes[root_to] = mutexes[root_from];
+            return;
         }
 
-        // merge u into v
-        for(const auto mu : mutex_reps_u) {
-            if(mutex_reps_v.find(mu.first) == mutex_reps_v.end()) {
-                mutex_v.insert(mu.second);
-            }
-        }
+        std::vector<uint64_t> merge_buffer;
+        merge_buffer.reserve(std::max(mutexes[root_from].size(), mutexes[root_to].size()));
 
-        // merge v into u
-        for(const auto mv : mutex_reps_v) {
-            if(mutex_reps_u.find(mv.first) == mutex_reps_u.end()) {
-                mutex_u.insert(mv.second);
-            }
-        }
+        std::merge(mutexes[root_from].begin(), mutexes[root_from].end(),
+                   mutexes[root_to].begin(), mutexes[root_to].end(),
+                   std::back_inserter(merge_buffer));
 
+        mutexes[root_to] = merge_buffer;
+        mutexes[root_from].clear();
     }
 
 
@@ -162,12 +136,12 @@ namespace segmentation {
             if(is_mutex) {
                 // find the mutex id and the connected nodes
                 const size_t mutex_id = edge_id - num_edges;
-                const uint32_t u = mutex_uvs(mutex_id, 0);
-                const uint32_t v = mutex_uvs(mutex_id, 1);
+                const uint64_t u = mutex_uvs(mutex_id, 0);
+                const uint64_t v = mutex_uvs(mutex_id, 1);
 
                 // find the current representatives
-                const uint32_t ru = ufd.find_set(u);
-                const uint32_t rv = ufd.find_set(v);
+                const uint64_t ru = ufd.find_set(u);
+                const uint64_t rv = ufd.find_set(v);
 
                 // if the nodes are already connected, do nothing
                 if(ru == rv) {
@@ -175,18 +149,17 @@ namespace segmentation {
                 }
 
                 // otherwise, insert the mutex
-                insert_mutex(u, v, rv, ufd, mutexes);
-                insert_mutex(v, u, ru, ufd, mutexes);
+                insert_mutex(ru, rv, mutex_id, mutexes);
 
             } else {
 
                 // find the connected nodes
-                const uint32_t u = uvs(edge_id, 0);
-                const uint32_t v = uvs(edge_id, 1);
+                const uint64_t u = uvs(edge_id, 0);
+                const uint64_t v = uvs(edge_id, 1);
 
                 // find the current representatives
-                const uint32_t ru = ufd.find_set(u);
-                const uint32_t rv = ufd.find_set(v);
+                uint64_t ru = ufd.find_set(u);
+                uint64_t rv = ufd.find_set(v);
 
                 // if the nodes are already connected, do nothing
                 if(ru == rv) {
@@ -194,13 +167,17 @@ namespace segmentation {
                 }
 
                 // otherwise, check if we have an active constraint / mutex edge
-                const bool have_mutex = check_mutex(u, rv, ufd, mutexes) || check_mutex(v, ru, ufd, mutexes);
-                //const bool have_mutex = check_mutex_edge(u, v, mutexes);
+                const bool have_mutex = check_mutex(ru, rv, mutexes);
 
                 // only merge if we don't have a mutex
                 if(!have_mutex) {
                     ufd.link(u, v);
-                    merge_mutexes(u, v, ufd, mutexes);
+                    // check  if we have to swap the roots
+                    if(ufd.find_set(ru) == rv) {
+                        std::swap(ru, rv);
+                    }
+                    // merge mutexes from rv -> ru
+                    merge_mutexes(rv, ru, mutexes);
                 }
 
             }
@@ -226,12 +203,11 @@ namespace segmentation {
         const auto & valid_edges = valid_edges_exp.derived_cast();
         auto & node_labeling = node_labeling_exp.derived_cast();
 
-
+        // determine number of nodes and attractive edges
         const size_t number_of_nodes = node_labeling.size();
         const size_t number_of_attractive_edges = number_of_nodes * number_of_attractive_channels;
         const size_t number_of_offsets = offsets.size();
         const size_t ndims = offsets[0].size();
-
 
         std::vector<int64_t> array_stride(ndims);
         int64_t current_stride = 1;
@@ -245,7 +221,7 @@ namespace segmentation {
             int64_t stride = 0;
             for (int i = 0; i < offset.size(); ++i){
                 stride += offset[i] * array_stride[i];
-            }           
+            }
             offset_strides.push_back(stride);
         }
 
@@ -262,7 +238,9 @@ namespace segmentation {
         // iterate over all edges
         for(const size_t edge_id : sorted_flat_indices) {
 
-            if (not valid_edges(edge_id)) continue;
+            if(!valid_edges(edge_id)){
+                continue;
+            }
 
             // check whether this edge is mutex via the edge offset
             const bool is_mutex = edge_id >= number_of_attractive_edges;
@@ -270,43 +248,36 @@ namespace segmentation {
             // get nodes connected by edge of edge_id
 
             // const auto affCoord_ = xt::unravel_from_strides(edge_id, strides, layout);
-            uint64_t u = edge_id % number_of_nodes;
-            uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+            const uint64_t u = edge_id % number_of_nodes;
+            const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+
+            // find the current representatives
+            uint64_t ru = ufd.find_set(u);
+            uint64_t rv = ufd.find_set(v);
+
+            // if the nodes are already connected, do nothing
+            if(ru == rv) {
+                continue;
+            }
 
             if(is_mutex) {
 
-                // find the current representatives
-                const uint64_t ru = ufd.find_set(u);
-                const uint64_t rv = ufd.find_set(v);
-
-                // if the nodes are already connected, do nothing
-                if(ru == rv) {
-                    continue;
-                }
-
-                // otherwise, insert the mutex
-                insert_mutex(u, v, rv, ufd, mutexes);
-                insert_mutex(v, u, ru, ufd, mutexes);
+                // insert the mutex edge into both mutex edge storages
+                insert_mutex(ru, rv, edge_id, mutexes);
 
             } else {
 
-                // find the current representatives
-                const uint64_t ru = ufd.find_set(u);
-                const uint64_t rv = ufd.find_set(v);
-
-                // if the nodes are already connected, do nothing
-                if(ru == rv) {
-                    continue;
-                }
-
                 // otherwise, check if we have an active constraint / mutex edge
-                const bool have_mutex = check_mutex(u, rv, ufd, mutexes) || check_mutex(v, ru, ufd, mutexes);
-                //const bool have_mutex = check_mutex_edge(u, v, mutexes);
+                const bool have_mutex = check_mutex(ru, rv, mutexes);
 
                 // only merge if we don't have a mutex
                 if(!have_mutex) {
                     ufd.link(u, v);
-                    merge_mutexes(u, v, ufd, mutexes);
+                    // check  if we have to swap the roots
+                    if(ufd.find_set(ru) == rv) {
+                        std::swap(ru, rv);
+                    }
+                    merge_mutexes(rv, ru, mutexes);
                 }
 
             }
@@ -435,16 +406,17 @@ namespace segmentation {
             // check whether this edge is mutex via the edge offset
             // find the current representatives
             // and skip if roots are identical
-            const uint64_t ru = node_ufd.find_set(u);
-            const uint64_t rv = node_ufd.find_set(v);
+            uint64_t ru = node_ufd.find_set(u);
+            uint64_t rv = node_ufd.find_set(v);
             if(ru == rv) {
                 continue;
             }
 
             const bool is_mutex = edge_id >= number_of_attractive_edges;
             if(is_mutex) {
-                insert_mutex(u, v, rv, node_ufd, mutexes);
-                insert_mutex(v, u, ru, node_ufd, mutexes);
+                // insert_mutex(u, v, rv, node_ufd, mutexes);
+                // insert_mutex(v, u, ru, node_ufd, mutexes);
+                insert_mutex(ru, rv, edge_id, mutexes);
                 add_neighbours(v,
                                offset_strides, 
                                number_of_nodes,
@@ -455,12 +427,18 @@ namespace segmentation {
                                pq);
             } else {
                 // otherwise, check if we have an active constraint / mutex edge
-                const bool have_mutex = check_mutex(u, rv, node_ufd, mutexes) || check_mutex(v, ru, node_ufd, mutexes);
+                const bool have_mutex = check_mutex(ru, rv, mutexes);
+
                 //const bool have_mutex = check_mutex_edge(u, v, mutexes);
                 // only merge if we don't have a mutex
                 if(!have_mutex) {
                     node_ufd.link(u, v);
-                    merge_mutexes(u, v, node_ufd, mutexes);
+                    // check  if we have to swap the roots
+                    if(node_ufd.find_set(ru) == rv) {
+                        std::swap(ru, rv);
+                    }
+                    merge_mutexes(rv, ru, mutexes);
+
                     add_neighbours(v,
                                offset_strides, 
                                number_of_nodes,
@@ -480,6 +458,7 @@ namespace segmentation {
             node_labeling[label] = node_ufd.find_set(label);
         }
     }
+
 
 
 }

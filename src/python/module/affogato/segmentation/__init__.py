@@ -29,7 +29,7 @@ def compute_mws_segmentation(number_of_attractive_channels, offsets, weights):
                                          sorted_flat_indices,
                                          valid_edges.ravel()).reshape(image_shape)
 
-def compute_mws_prim_segmentation(number_of_attractive_channels, offsets, weights, max_iter):
+def compute_mws_prim_segmentation(number_of_attractive_channels, offsets, weights):
 
     ndim = len(offsets[0])
     assert all(len(off) == ndim for off in offsets)
@@ -50,5 +50,4 @@ def compute_mws_prim_segmentation(number_of_attractive_channels, offsets, weight
                                          offsets,
                                          image_shape,
                                          weights.ravel(),
-                                         valid_edges.ravel(),
-                                         max_iter).reshape(image_shape)
+                                         valid_edges.ravel()).reshape(image_shape)

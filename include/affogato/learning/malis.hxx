@@ -124,8 +124,8 @@ namespace learning {
             if(setU != setV) {
 
                 // merge nodes
-                // sets.link(nodeU, nodeV);
-                sets.link(setU, setV);
+                sets.link(nodeU, nodeV);
+                // sets.link(setU, setV);
 
                 // initialize values for gradient calculation
                 GradType currentGradient = 0;
