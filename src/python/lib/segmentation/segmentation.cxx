@@ -53,8 +53,8 @@ PYBIND11_MODULE(_segmentation, m)
     m.def("compute_mws_segmentation_impl",[](const size_t number_of_attractive_channels,
                                         const std::vector<std::vector<int>> & offsets,
                                         const std::vector<int> & image_shape,
-                                        const xt::pytensor<int64_t, 1> & sorted_flat_indices,
-                                        const xt::pytensor<bool, 1> & valid_edges){
+                                        const xt::pytensor<int64_t, 1> & sorted_flat_indices){
+                                        // const xt::pytensor<bool, 1> & valid_edges){
         int64_t number_of_nodes = 1;
         for (auto & s: image_shape){
             number_of_nodes *= s;
@@ -66,13 +66,13 @@ PYBIND11_MODULE(_segmentation, m)
                                                    offsets,
                                                    image_shape,
                                                    sorted_flat_indices,
-                                                   valid_edges,
+                                                   // valid_edges,
                                                    node_labeling);
         }
         return node_labeling;
     }, py::arg("number_of_attractive_channels"),
        py::arg("offsets"),
        py::arg("image_shape"),
-       py::arg("sorted_flat_indices"),
-       py::arg("valid_edges"));
+       py::arg("sorted_flat_indices"));
+       // py::arg("valid_edges"));
 }
