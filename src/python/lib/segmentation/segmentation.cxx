@@ -75,4 +75,30 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("image_shape"),
        py::arg("sorted_flat_indices"),
        py::arg("valid_edges"));
+
+    m.def("compute_mws_prim_segmentation_impl",[](const size_t number_of_attractive_channels,
+                                        const std::vector<std::vector<int>> & offsets,
+                                        const std::vector<int> & image_shape,
+                                        const xt::pytensor<float, 1> & edge_weights,
+                                        const xt::pytensor<bool, 1> & valid_edges){
+        int64_t number_of_nodes = 1;
+        for (auto & s: image_shape){
+            number_of_nodes *= s;
+        }
+        xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({number_of_nodes});
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::compute_mws_prim_segmentation(number_of_attractive_channels,
+                                                   offsets,
+                                                   image_shape,
+                                                   edge_weights,
+                                                   valid_edges,
+                                                   node_labeling);
+        }
+        return node_labeling;
+    }, py::arg("number_of_attractive_channels"),
+       py::arg("offsets"),
+       py::arg("image_shape"),
+       py::arg("edge_weights"),
+       py::arg("valid_edges"));
 }
