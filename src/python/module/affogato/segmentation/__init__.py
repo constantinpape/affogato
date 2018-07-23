@@ -17,6 +17,7 @@ def compute_mws_segmentation(number_of_attractive_channels, offsets, weights):
             invalid_slice = (i, ) + tuple(slice(None) if j != d else inv_slice
                                           for d in range(ndim))
 
+            print(invalid_slice, valid_edges.shape)
             valid_edges[invalid_slice] = 0
 
     # sort and flatten weights

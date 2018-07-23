@@ -277,9 +277,9 @@ namespace segmentation {
                     if(ufd.find_set(ru) == rv) {
                         std::swap(ru, rv);
                     }
+                    // merge mutexes from rv -> ru
                     merge_mutexes(rv, ru, mutexes);
                 }
-
             }
         }
 
@@ -300,15 +300,12 @@ namespace segmentation {
                                EdgePriorityQueue & pq){
 
 
-        ufd.find_set(uint64_t(0));
-
         const uint64_t ru = ufd.find_set(position);
-        
         for(int i = 0; i < offset_strides.size(); ++i){
             // go in positive offset direction
             const uint64_t edge_id = position + i * number_of_nodes;
-            const uint64_t neighbour = position + offset_strides[i];
             if (valid_edges(edge_id) and !visited(edge_id)){
+                const uint64_t neighbour = position + offset_strides[i];
                 const uint64_t rv = ufd.find_set(neighbour);
                 if (ru != rv){
                     pq.push(std::make_tuple(edge_weights(edge_id), edge_id, position, neighbour));
@@ -396,14 +393,15 @@ namespace segmentation {
             // extract next element from the queue
             const PQElement position_vector = pq.top();
             pq.pop();
-            // std::cout << " w " << std::get<0>(position_vector) << std::endl;
             const uint64_t edge_id = std::get<1>(position_vector);
             const uint64_t u = std::get<2>(position_vector);
             const uint64_t v = std::get<3>(position_vector);
+
+            if(visited(edge_id)) {
+                continue;
+            }
             visited(edge_id) = 1;
 
-
-            // check whether this edge is mutex via the edge offset
             // find the current representatives
             // and skip if roots are identical
             uint64_t ru = node_ufd.find_set(u);
@@ -412,19 +410,11 @@ namespace segmentation {
                 continue;
             }
 
+            // check whether this edge is mutex via the edge offset
             const bool is_mutex = edge_id >= number_of_attractive_edges;
+
             if(is_mutex) {
-                // insert_mutex(u, v, rv, node_ufd, mutexes);
-                // insert_mutex(v, u, ru, node_ufd, mutexes);
                 insert_mutex(ru, rv, edge_id, mutexes);
-                add_neighbours(v,
-                               offset_strides, 
-                               number_of_nodes,
-                               edge_weights,
-                               valid_edges,
-                               node_ufd,
-                               visited,
-                               pq);
             } else {
                 // otherwise, check if we have an active constraint / mutex edge
                 const bool have_mutex = check_mutex(ru, rv, mutexes);
@@ -438,19 +428,16 @@ namespace segmentation {
                         std::swap(ru, rv);
                     }
                     merge_mutexes(rv, ru, mutexes);
-
-                    add_neighbours(v,
-                               offset_strides, 
-                               number_of_nodes,
-                               edge_weights,
-                               valid_edges,
-                               node_ufd,
-                               visited,
-                               pq);
                 }
             }
-
-
+            add_neighbours(v,
+                       offset_strides, 
+                       number_of_nodes,
+                       edge_weights,
+                       valid_edges,
+                       node_ufd,
+                       visited,
+                       pq);
         }
 
         // get node labeling into output
