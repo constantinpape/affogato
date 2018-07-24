@@ -209,11 +209,11 @@ namespace segmentation {
 
     template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
     void compute_mws_segmentation(const size_t number_of_attractive_channels,
-                                const std::vector<std::vector<int>> & offsets,
-                                const std::vector<int> & image_shape,
-                                const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
-                                const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
-                                xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
+                                  const std::vector<std::vector<int>> & offsets,
+                                  const std::vector<int> & image_shape,
+                                  const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
+                                  const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
+                                  xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
 
         // casts
         const auto & sorted_flat_indices = sorted_flat_indices_exp.derived_cast();
@@ -239,7 +239,7 @@ namespace segmentation {
             int64_t stride = 0;
             for (int i = 0; i < offset.size(); ++i){
                 stride += offset[i] * array_stride[i];
-            }           
+            }
             offset_strides.push_back(stride);
         }
 

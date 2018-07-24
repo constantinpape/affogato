@@ -7,6 +7,7 @@
 
 #include "affogato/segmentation/mutex_watershed.hxx"
 #include "affogato/segmentation/connected_components.hxx"
+#include "affogato/segmentation/zwatershed.hxx"
 
 namespace py = pybind11;
 
@@ -16,6 +17,7 @@ PYBIND11_MODULE(_segmentation, m)
     m.doc() = "segmentation module of affogato";
 
     using namespace affogato;
+
 
     m.def("connected_components", [](const xt::pyarray<float> & affinities,
                                      const float threshold) {
@@ -50,6 +52,7 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("uvs"), py::arg("mutex_uvs"),
        py::arg("weights"), py::arg("mutex_weights"));
 
+
     m.def("compute_mws_segmentation_impl",[](const size_t number_of_attractive_channels,
                                         const std::vector<std::vector<int>> & offsets,
                                         const std::vector<int> & image_shape,
@@ -75,4 +78,29 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("image_shape"),
        py::arg("sorted_flat_indices"),
        py::arg("valid_edges"));
+
+
+    // TODO make edge weights const once changed impl
+    m.def("compute_zws_segmentation",[](xt::pyarray<uint64_t> & edge_weights,
+							            const double lower_threshold,
+        					            const double upper_threshold,
+        					            const size_t size_threshold,
+							            const double merge_threshold) {
+
+        typedef typename xt::pyarray<uint64_t>::shape_type ShapeType;
+        ShapeType shape(edge_weights.shape().begin() + 1, edge_weights.shape().end());
+
+        xt::pyarray<uint64_t> labels = xt::zeros<uint64_t>(shape);
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::compute_zws_segmentation(edge_weights,
+                                                   lower_threshold, upper_threshold,
+                                                   size_threshold, merge_threshold, labels);
+        }
+        return labels;
+    }, py::arg("edge_weights"),
+       py::arg("lower_threshold"),
+       py::arg("upper_threshold"),
+       py::arg("size_threshold"),
+       py::arg("merge_threshold"));
 }
