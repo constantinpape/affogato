@@ -7,33 +7,19 @@
 namespace affogato {
 namespace segmentation {
 
-    // the datastructure to hold the mutex edges for a single cluster and all clusters
-    // typedef std::unordered_set<uint64_t> MutexSet;
-    // typedef std::vector<MutexSet> MutexStorage;
+    // typedef
     typedef std::tuple<float, uint64_t, uint64_t, uint64_t> PQElement;
-    auto pq_compare = [](PQElement left, PQElement right) { return std::get<0>(left) < std::get<0>(right);};
+    auto pq_compare = [](PQElement left, PQElement right) {return std::get<0>(left) < std::get<0>(right);};
     // typedef std::priority_queue<> EdgePriorityQueue;
-    typedef std::priority_queue<PQElement, std::vector<PQElement>, decltype(pq_compare)> EdgePriorityQueue;
+    typedef std::priority_queue<PQElement, std::vector<PQElement>,
+                                decltype(pq_compare)> EdgePriorityQueue;
     typedef boost::disjoint_sets<uint64_t*, uint64_t*> NodeUnionFind;
 
-    // template<class UFD>
-    // inline bool check_mutex(const uint32_t u, const uint32_t rv,
-    //                         UFD & ufd, const MutexStorage & mutexes) {
-    //     // the mutex storages are symmetric, so we only need to check one of them
-    //     const auto & mutex_u = mutexes[u];
-    //     bool have_mutex = false;
-    //     // we check for all representatives of mutex edges if
-    //     // they are the same as the reperesentative of v
-    //     for(const auto mu : mutex_u) {
-    //         if(ufd.find_set(mu) == rv) {
-    //             have_mutex = true;
-    //             break;
 
 
-    typedef std::vector<std::vector<uint64_t>> MutexStorage;
-
+    template<class MUTEX_STORAGE>
     inline bool check_mutex(const uint64_t ru, const uint64_t rv,
-                            const MutexStorage & mutexes) {
+                            const MUTEX_STORAGE & mutexes) {
         // get iterators to the mutex vectors of rep u and rep v
         auto mutex_it_u = mutexes[ru].begin();
         auto mutex_it_v = mutexes[rv].begin();
@@ -55,18 +41,26 @@ namespace segmentation {
 
     // insert 'mutex_edge_id' into the vectors containing mutexes of 'ru' and 'rv'
     inline void insert_mutex(const uint64_t ru, const uint64_t rv,
-                             const uint64_t mutex_edge_id, MutexStorage & mutexes) {
+                             const uint64_t mutex_edge_id, MUTEX_STORAGE & mutexes) {
         // in order to keep the mutex vectors handy, we only insert the mutex edge,
         // if the two sets don't share a mutex yet
         if (!check_mutex(ru, rv, mutexes)){
-            mutexes[ru].insert(std::upper_bound(mutexes[ru].begin(), mutexes[ru].end(), mutex_edge_id), mutex_edge_id);
-            mutexes[rv].insert(std::upper_bound(mutexes[rv].begin(), mutexes[rv].end(), mutex_edge_id), mutex_edge_id);
+            mutexes[ru].insert(std::upper_bound(mutexes[ru].begin(),
+                                                mutexes[ru].end(),
+                                                mutex_edge_id),
+                                mutex_edge_id);
+            mutexes[rv].insert(std::upper_bound(mutexes[rv].begin(),
+                                                mutexes[rv].end(),
+                                                mutex_edge_id),
+                                mutex_edge_id);
         }
     }
 
 
     // merge the mutex edges by merging from 'root_from' to 'root_to'
-    inline void merge_mutexes(const uint64_t root_from, const uint64_t root_to, MutexStorage & mutexes) {
+    template<class MUTEX_STORAGE>
+    inline void merge_mutexes(const uint64_t root_from, const uint64_t root_to,
+                              MutexStorage & mutexes) {
         if (mutexes[root_from].size() == 0) {
             return;
         }
@@ -125,6 +119,8 @@ namespace segmentation {
             return val_a < val_b;
         });
 
+        // data-structure storing mutex edges
+        typedef std::vector<std::vector<uint64_t>> MutexStorage;
         MutexStorage mutexes(number_of_labels);
 
         // iterate over all edges
@@ -233,6 +229,8 @@ namespace segmentation {
             ufd.make_set(label);
         }
 
+        // data-structure storing mutex edges
+        typedef std::vector<std::vector<uint64_t>> MutexStorage;
         MutexStorage mutexes(number_of_nodes);
 
         // iterate over all edges
@@ -291,14 +289,13 @@ namespace segmentation {
 
     template <class WEIGHT_ARRAY, class VALID_ARRAY>
     inline void add_neighbours(const uint64_t & position,
-                               const std::vector<int64_t> & offset_strides, 
+                               const std::vector<int64_t> & offset_strides,
                                const size_t & number_of_nodes,
                                const WEIGHT_ARRAY & edge_weights,
                                const VALID_ARRAY & valid_edges,
                                NodeUnionFind & ufd,
                                xt::pytensor<bool, 1> & visited,
                                EdgePriorityQueue & pq){
-
 
         const uint64_t ru = ufd.find_set(position);
         for(int i = 0; i < offset_strides.size(); ++i){
@@ -330,19 +327,19 @@ namespace segmentation {
         }
     }
 
+
     template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
     void compute_mws_prim_segmentation(const size_t number_of_attractive_channels,
-                                const std::vector<std::vector<int>> & offsets,
-                                const std::vector<int> & image_shape,
-                                const xt::xexpression<WEIGHT_ARRAY> & edge_weight_exp,
-                                const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
-                                xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
+                                       const std::vector<std::vector<int>> & offsets,
+                                       const std::vector<int> & image_shape,
+                                       const xt::xexpression<WEIGHT_ARRAY> & edge_weight_exp,
+                                       const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
+                                       xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
 
         // casts
         const auto & edge_weights = edge_weight_exp.derived_cast();
         const auto & valid_edges = valid_edges_exp.derived_cast();
         auto & node_labeling = node_labeling_exp.derived_cast();
-
 
         const size_t number_of_nodes = node_labeling.size();
         const size_t number_of_attractive_edges = number_of_nodes * number_of_attractive_channels;
@@ -374,6 +371,8 @@ namespace segmentation {
             node_ufd.make_set(label);
         }
 
+        // data-structure storing mutex edges
+        typedef std::vector<std::vector<uint64_t>> MutexStorage;
         MutexStorage mutexes(number_of_nodes);
         EdgePriorityQueue pq(pq_compare);
 
