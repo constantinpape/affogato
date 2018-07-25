@@ -53,13 +53,10 @@ class TestMutexWatershed(unittest.TestCase):
         offsets = [[-1, 0], [0, -1], [-9, 0]]
         # offsets = [[-1, 0], [0, -1], [-2, 0], [0, -2]]
         with h5py.File("im_131.h5", "r") as hpy:
-            weights = np.array(hpy["data"].value.astype("float64"))[:len(offsets)][:, 100:-100, 100:-100]
+            weights = np.array(hpy["data"].value.astype("float64"))[:len(offsets)]
             
             weights[number_of_attractive_channels:] *= -1
             weights[number_of_attractive_channels:] += 1
-
-        weights += np.random.uniform(high=0.001, size=weights.size).reshape(weights.shape)
-        weights /= weights.max()
 
         # compute mutex labeling
         node_labels = compute_mws_segmentation(number_of_attractive_channels,

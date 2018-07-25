@@ -318,7 +318,7 @@ namespace segmentation {
                 const uint64_t neg_neighbour = position - offset_strides[i];
                 if (neg_neighbour < number_of_nodes){
                     const uint64_t neg_edge_id = neg_neighbour + i * number_of_nodes;
-                    if (valid_edges(neg_edge_id) and !visited(edge_id)){
+                    if (valid_edges(neg_edge_id) and !visited(neg_edge_id)){
                         const uint64_t rv = ufd.find_set(neg_neighbour);
                         if (ru != rv){
                             pq.push(std::make_tuple(edge_weights(neg_edge_id), neg_edge_id, position, neg_neighbour));
@@ -415,6 +415,14 @@ namespace segmentation {
 
             if(is_mutex) {
                 insert_mutex(ru, rv, edge_id, mutexes);
+                add_neighbours(v,
+                               offset_strides, 
+                               number_of_nodes,
+                               edge_weights,
+                               valid_edges,
+                               node_ufd,
+                               visited,
+                               pq);
             } else {
                 // otherwise, check if we have an active constraint / mutex edge
                 const bool have_mutex = check_mutex(ru, rv, mutexes);
@@ -428,16 +436,16 @@ namespace segmentation {
                         std::swap(ru, rv);
                     }
                     merge_mutexes(rv, ru, mutexes);
+                    add_neighbours(v,
+                                   offset_strides, 
+                                   number_of_nodes,
+                                   edge_weights,
+                                   valid_edges,
+                                   node_ufd,
+                                   visited,
+                                   pq);
                 }
             }
-            add_neighbours(v,
-                       offset_strides, 
-                       number_of_nodes,
-                       edge_weights,
-                       valid_edges,
-                       node_ufd,
-                       visited,
-                       pq);
         }
 
         // get node labeling into output
