@@ -80,24 +80,24 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("valid_edges"));
 
 
-    // TODO make edge weights const once changed impl
-    m.def("compute_zws_segmentation",[](xt::pyarray<uint64_t> & edge_weights,
+    m.def("compute_zws_segmentation",[](const xt::pyarray<float> & edge_weights,
 							            const double lower_threshold,
         					            const double upper_threshold,
-        					            const size_t size_threshold,
-							            const double merge_threshold) {
+							            const double merge_threshold,
+        					            const size_t size_threshold) {
 
         typedef typename xt::pyarray<uint64_t>::shape_type ShapeType;
         ShapeType shape(edge_weights.shape().begin() + 1, edge_weights.shape().end());
 
+        size_t n_labels;
         xt::pyarray<uint64_t> labels = xt::zeros<uint64_t>(shape);
         {
             py::gil_scoped_release allowThreads;
-            segmentation::compute_zws_segmentation(edge_weights,
-                                                   lower_threshold, upper_threshold,
-                                                   size_threshold, merge_threshold, labels);
+            n_labels = segmentation::compute_zws_segmentation(edge_weights,
+                                                              lower_threshold, upper_threshold,
+                                                              merge_threshold, size_threshold, labels);
         }
-        return labels;
+        return std::make_pair(labels, n_labels);
     }, py::arg("edge_weights"),
        py::arg("lower_threshold"),
        py::arg("upper_threshold"),

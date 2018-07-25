@@ -29,7 +29,7 @@ inline void get_node_weights(const xt::xexpression<EDGE_WEIGHTS> & edge_weights_
     const unsigned ndim = shape.size();
 
     // ValueType infinity = *std::max_element(edge_weights.begin(), edge_weights.end()) + .1;
-    ValueType infinity = 1.1;
+    const ValueType infinity = 1.1;
     // iterate over all spatial coordinates. for each node, find all weigths that are connected to it
     util::for_each_coordinate(shape, [&](const xt::xindex coord){
 
@@ -72,29 +72,12 @@ inline void get_node_weights(const xt::xexpression<EDGE_WEIGHTS> & edge_weights_
 }
 
 
-template<class WEIGHTS>
-void threshold_edge_weights(xt::xexpression<WEIGHTS> & edge_weights_exp,
-                            const double upper_threshold ) {
-
-    typedef typename WEIGHTS::value_type ValueType;
-    auto & edge_weights = edge_weights_exp.derived_cast();
-    //value_type infinity = *std::max_element(edge_weights.begin(), edge_weights.end()) + .1;
-    ValueType infinity = 1.1;
-
-    xt::xindex aff_shape(edge_weights.shape().begin(), edge_weights.shape().end());
-
-    util::for_each_coordinate(aff_shape, [&](const xt::xindex & coord){
-        auto & val = edge_weights[coord];
-        val = (val > upper_threshold) ? infinity : val;
-    });
-}
-
-
 template<class EDGE_WEIGHTS, class NODE_WEIGHTS, class LABELS>
 inline uint64_t stream(const xt::xindex & start_coord,
                        const xt::xexpression<EDGE_WEIGHTS> & edge_weights_exp,
                        const xt::xexpression<NODE_WEIGHTS> & node_weights_exp,
                        const xt::xexpression<LABELS> & labels_exp,
+                       const double upper_threshold,
                        std::vector<xt::xindex> & stream_coordinates
                        /*,std::ofstream debug*/ ) {
 
@@ -112,6 +95,8 @@ inline uint64_t stream(const xt::xindex & start_coord,
     // initialize pixel queue
     std::deque<xt::xindex> queue;
     queue.push_back(start_coord);
+
+    const ValueType infinity = 1.1;
 
     while(!queue.empty()) {
 
@@ -140,6 +125,7 @@ inline uint64_t stream(const xt::xindex & start_coord,
                 }
 
                 ValueType weight = edge_weights[aff_coord];
+                weight = (weight > upper_threshold) ? infinity : weight;
 
                 // only consider neighbor if its weight is equal to the nodes max-weight
                 if(fabs(weight - w_max) > std::numeric_limits<ValueType>::epsilon()) {
@@ -179,6 +165,7 @@ inline uint64_t stream(const xt::xindex & start_coord,
 template<class EDGE_WEIGHTS, class NODE_WEIGHTS, class LABELS>
 inline size_t run_zws(const xt::xexpression<EDGE_WEIGHTS> & edge_weights_exp,
                       const xt::xexpression<NODE_WEIGHTS> & node_weights_exp,
+                      const double upper_threshold,
                       xt::xexpression<LABELS> & labels_exp,
                       bool const ignore_border=false) {
     typedef typename LABELS::value_type LabelType;
@@ -218,7 +205,8 @@ inline size_t run_zws(const xt::xexpression<EDGE_WEIGHTS> & edge_weights_exp,
 
         // call stream -> finds the stream belonging to the current label and pixel coordinates belonging to the stream
         std::vector<xt::xindex> stream_coordinates;
-        label = stream(coord, edge_weights, node_weights, labels, stream_coordinates); //debug
+        label = stream(coord, edge_weights, node_weights, labels,
+                       upper_threshold, stream_coordinates); //debug
 
         // if stream returns 0, we found a new stream
         if(label == 0) {
@@ -239,9 +227,13 @@ inline size_t run_zws(const xt::xexpression<EDGE_WEIGHTS> & edge_weights_exp,
 template<class EDGE_WEIGHTS, class LABELS, class LINK>
 inline void get_region_weights(const xt::xexpression<EDGE_WEIGHTS> & edge_weights_exp,
                                const xt::xexpression<LABELS> & labels_exp,
+                               const double upper_threshold,
                                std::unordered_map<LINK, typename EDGE_WEIGHTS::value_type, boost::hash<LINK>> & links) {
 
     typedef LINK Link;
+    typedef typename EDGE_WEIGHTS::value_type ValueType;
+
+    const ValueType infinity = 1.1;
 
     const auto & edge_weights = edge_weights_exp.derived_cast();
     const auto & labels = labels_exp.derived_cast();
@@ -267,7 +259,8 @@ inline void get_region_weights(const xt::xexpression<EDGE_WEIGHTS> & edge_weight
                 xt::xindex aff_coord(ndim + 1);
                 std::copy(coord.begin(), coord.end(), aff_coord.begin() + 1);
                 aff_coord[0] = d;
-                const auto weight = edge_weights[aff_coord];
+                ValueType weight = edge_weights[aff_coord];
+                weight = (weight > upper_threshold) ? infinity : weight;
 
                 auto link_it = links.find(link);
                 if(link_it != links.end()) {
@@ -358,14 +351,12 @@ inline size_t apply_size_filter(const std::unordered_map<LINK, WEIGHT, boost::ha
 // z-watershed, implementation based on
 // http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=4564470&tag=1
 // and http://dspace.mit.edu/handle/1721.1/66820
-//
-// TODO make edge weights const once changed impl
 template<class WEIGHTS, class LABELS>
-size_t compute_zws_segmentation(xt::xexpression<WEIGHTS> & edge_weights_exp,
+size_t compute_zws_segmentation(const xt::xexpression<WEIGHTS> & edge_weights_exp,
 							    const double lower_threshold,
         					    const double upper_threshold,
-        					    const size_t size_threshold,
 							    const double merge_threshold,
+        					    const size_t size_threshold,
                                 xt::xexpression<LABELS> & labels_exp) {
 
     typedef typename WEIGHTS::value_type ValueType;
@@ -374,25 +365,30 @@ size_t compute_zws_segmentation(xt::xexpression<WEIGHTS> & edge_weights_exp,
         throw std::runtime_error("Thresholds inverted!");
     }
 
-    auto & edge_weights = edge_weights_exp.derived_cast();
+    const auto & edge_weights = edge_weights_exp.derived_cast();
     // initialize the node weights, which are one dimension less than the edge weights
     typedef typename xt::xarray<ValueType>::shape_type ShapeType;
     ShapeType shape(edge_weights.shape().begin() + 1, edge_weights.shape().end());
     xt::xarray<ValueType> node_weights = xt::zeros<ValueType>(shape);
 
+    // std::cout << "computing node weights from edge weights" << std::endl;
     get_node_weights(edge_weights, lower_threshold, node_weights);
 
-    // TODO this can be done on the fly, so we can avoid copying the edge weights!
-    threshold_edge_weights(edge_weights, upper_threshold);
-    size_t n_labels = run_zws(edge_weights, node_weights, labels_exp);
+    // threshold_edge_weights(edge_weights, upper_threshold);
+    // std::cout << "run zws" << std::endl;
+    size_t n_labels = run_zws(edge_weights, node_weights, upper_threshold, labels_exp);
+    // std::cout << n_labels << " labels after zws" << std::endl;
 
     typedef std::pair<LabelType, LabelType> Link;
     std::unordered_map<Link, ValueType, boost::hash<Link>> region_weights;
-    get_region_weights(edge_weights, labels_exp, region_weights);
+    // std::cout << "get region weights" << std::endl;
+    get_region_weights(edge_weights, labels_exp, upper_threshold, region_weights);
 
+    // std::cout << "apply size filter" << std::endl;
     n_labels = apply_size_filter(region_weights, n_labels,
                                  size_threshold, merge_threshold,
                                  labels_exp);
+    // std::cout << n_labels << " labels after size-filter" << std::endl;
     return n_labels;
 }
 
