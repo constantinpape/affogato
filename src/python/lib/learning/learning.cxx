@@ -19,33 +19,59 @@ PYBIND11_MODULE(_learning, m)
     // FIXME weird xtensor error prevents nd impl
     m.def("compute_malis_2d", [](const xt::pytensor<float, 3> & affinities,
                                  const xt::pytensor<uint64_t, 2> & labels,
-                                 const std::vector<std::vector<int>> & offsets) {
+                                 const std::vector<std::vector<int>> & offsets,
+                                 const int pass) {
         //
         const auto & aff_shape = affinities.shape();
         double loss;
         xt::pytensor<float, 3> gradients = xt::zeros<float>(aff_shape);
         {
             py::gil_scoped_release allowThreads;
-            loss = learning::constrained_malis(affinities, labels, gradients, offsets);
+            if(pass == 0) {
+                // pass = 0: we compute the constrained malis gradient
+                loss = learning::constrained_malis(affinities, labels, gradients, offsets);
+            } else if(pass == 1) {
+                // pass = 1: we compute the unconstrained malis gradient for the positive pass
+                loss = learning::malis_gradient(affinities, labels, gradients, offsets, true);
+            } else if(pass == 2) {
+                // pass = 2: we compute the unconstrained malis gradient for the negative pass
+                loss = learning::malis_gradient(affinities, labels, gradients, offsets, false);
+            } else {
+                throw std::runtime_error("Invalid malis pass option");
+            }
         }
         return std::make_pair(loss, gradients);
     }, py::arg("affinities"),
        py::arg("labels"),
-       py::arg("offsets"));
+       py::arg("offsets"),
+       py::arg("pass")=0);
 
     m.def("compute_malis_3d", [](const xt::pytensor<float, 4> & affinities,
                                  const xt::pytensor<uint64_t, 3> & labels,
-                                 const std::vector<std::vector<int>> & offsets) {
+                                 const std::vector<std::vector<int>> & offsets,
+                                 const int pass) {
         //
         const auto & aff_shape = affinities.shape();
         double loss;
         xt::pytensor<float, 4> gradients = xt::zeros<float>(aff_shape);
         {
             py::gil_scoped_release allowThreads;
-            loss = learning::constrained_malis(affinities, labels, gradients, offsets);
+            if(pass == 0) {
+                // pass = 0: we compute the constrained malis gradient
+                loss = learning::constrained_malis(affinities, labels, gradients, offsets);
+            } else if(pass == 1) {
+                // pass = 1: we compute the unconstrained malis gradient for the positive pass
+                loss = learning::malis_gradient(affinities, labels, gradients, offsets, true);
+            } else if(pass == 2) {
+                // pass = 2: we compute the unconstrained malis gradient for the negative pass
+                loss = learning::malis_gradient(affinities, labels, gradients, offsets, false);
+            } else {
+                throw std::runtime_error("Invalid malis pass option");
+            }
         }
         return std::make_pair(loss, gradients);
     }, py::arg("affinities"),
        py::arg("labels"),
-       py::arg("offsets"));
+       py::arg("offsets"),
+       py::arg("pass")=0);
 }

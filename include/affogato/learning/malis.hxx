@@ -82,8 +82,8 @@ namespace learning {
         const auto & layout = affs.layout();
         LabelType setU, setV, nodeU, nodeV;
         // coordinates for affinities and gt
-        xt::xindex affCoord(affs.size());
-        xt::xindex gtCoordU(gt.size()), gtCoordV(gt.size());
+        xt::xindex affCoord(nDim + 1);
+        xt::xindex gtCoordU(nDim), gtCoordV(nDim);
 
         double loss = 0;
         // iterate over the queue
