@@ -27,16 +27,16 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
         # TODO: ignore masked weights during sorting
         # we can maybe use np.ma for this
         sorted_flat_indices = np.argsort(weights, axis=None)[::-1]
-        labels = compute_mws_segmentation_impl(number_of_attractive_channels,
+        labels = compute_mws_segmentation_impl(sorted_flat_indices,
+                                               valid_edges.ravel(),
                                                offsets,
-                                               image_shape,
-                                               sorted_flat_indices,
-                                               valid_edges.ravel())
+                                               number_of_attractive_channels,
+                                               image_shape)
     else:
-        labels = compute_mws_prim_segmentation_impl(number_of_attractive_channels,
+        labels = compute_mws_prim_segmentation_impl(weights.ravel(),
+                                                    valid_edges.ravel(),
                                                     offsets,
-                                                    image_shape,
-                                                    weights.ravel(),
-                                                    valid_edges.ravel())
+                                                    number_of_attractive_channels,
+                                                    image_shape)
 
     return labels.reshape(image_shape)

@@ -7,14 +7,12 @@
 namespace affogato {
 namespace segmentation {
 
-    // typedef
-    typedef std::tuple<float, uint64_t, uint64_t, uint64_t> PQElement;
-    auto pq_compare = [](PQElement left, PQElement right) {return std::get<0>(left) < std::get<0>(right);};
-    // typedef std::priority_queue<> EdgePriorityQueue;
-    typedef std::priority_queue<PQElement, std::vector<PQElement>,
-                                decltype(pq_compare)> EdgePriorityQueue;
-    typedef boost::disjoint_sets<uint64_t*, uint64_t*> NodeUnionFind;
-
+    //
+    // mutex helper functions:
+    // check_mutex: check if mutex exists between two representatives
+    // insert_mutex: insert mutex between two representatives
+    // merge_mutexex: merge mutex constrained of two mutex stores
+    //
 
 
     template<class MUTEX_STORAGE>
@@ -40,6 +38,7 @@ namespace segmentation {
 
 
     // insert 'mutex_edge_id' into the vectors containing mutexes of 'ru' and 'rv'
+    template<class MUTEX_STORAGE>
     inline void insert_mutex(const uint64_t ru, const uint64_t rv,
                              const uint64_t mutex_edge_id, MUTEX_STORAGE & mutexes) {
         // in order to keep the mutex vectors handy, we only insert the mutex edge,
@@ -60,7 +59,7 @@ namespace segmentation {
     // merge the mutex edges by merging from 'root_from' to 'root_to'
     template<class MUTEX_STORAGE>
     inline void merge_mutexes(const uint64_t root_from, const uint64_t root_to,
-                              MutexStorage & mutexes) {
+                              MUTEX_STORAGE & mutexes) {
         if (mutexes[root_from].size() == 0) {
             return;
         }
@@ -82,6 +81,7 @@ namespace segmentation {
     }
 
 
+    // compute mutex clustering for a graph with attrative and mutex edges
     template<class EDGE_ARRAY, class WEIGHT_ARRAY, class NODE_ARRAY>
     void compute_mws_clustering(const size_t number_of_labels,
                                 const xt::xexpression<EDGE_ARRAY> & uvs_exp,
@@ -186,13 +186,14 @@ namespace segmentation {
     }
 
 
+    // compute mutex segmentation via kruskal
     template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
-    void compute_mws_segmentation(const size_t number_of_attractive_channels,
-                                const std::vector<std::vector<int>> & offsets,
-                                const std::vector<int> & image_shape,
-                                const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
-                                const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
-                                xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
+    void compute_mws_segmentation(const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
+                                  const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
+                                  const std::vector<std::vector<int>> & offsets,
+                                  const size_t number_of_attractive_channels,
+                                  const std::vector<int> & image_shape,
+                                  xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
 
         // casts
         const auto & sorted_flat_indices = sorted_flat_indices_exp.derived_cast();
@@ -287,15 +288,17 @@ namespace segmentation {
         }
     }
 
-    template <class WEIGHT_ARRAY, class VALID_ARRAY>
+    // helper function for mws prim implementation:
+    // add all neighbors of given node to the priority queue
+    template <class WEIGHT_ARRAY, class VALID_ARRAY, class UFD, class PRIORITY_QUEUE>
     inline void add_neighbours(const uint64_t & position,
                                const std::vector<int64_t> & offset_strides,
                                const size_t & number_of_nodes,
                                const WEIGHT_ARRAY & edge_weights,
                                const VALID_ARRAY & valid_edges,
-                               NodeUnionFind & ufd,
+                               UFD & ufd,
                                xt::pytensor<bool, 1> & visited,
-                               EdgePriorityQueue & pq){
+                               PRIORITY_QUEUE & pq){
 
         const uint64_t ru = ufd.find_set(position);
         for(int i = 0; i < offset_strides.size(); ++i){
@@ -306,7 +309,6 @@ namespace segmentation {
                 const uint64_t rv = ufd.find_set(neighbour);
                 if (ru != rv){
                     pq.push(std::make_tuple(edge_weights(edge_id), edge_id, position, neighbour));
-                    // visited(edge_id) = 1;
                 }
             }
 
@@ -319,7 +321,6 @@ namespace segmentation {
                         const uint64_t rv = ufd.find_set(neg_neighbour);
                         if (ru != rv){
                             pq.push(std::make_tuple(edge_weights(neg_edge_id), neg_edge_id, position, neg_neighbour));
-                            // visited(neg_edge_id) = 1;
                         }
                     }
                 }
@@ -328,13 +329,20 @@ namespace segmentation {
     }
 
 
+    // compute mutex segmentation via prim's algorithm
     template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
-    void compute_mws_prim_segmentation(const size_t number_of_attractive_channels,
-                                       const std::vector<std::vector<int>> & offsets,
-                                       const std::vector<int> & image_shape,
-                                       const xt::xexpression<WEIGHT_ARRAY> & edge_weight_exp,
+    void compute_mws_prim_segmentation(const xt::xexpression<WEIGHT_ARRAY> & edge_weight_exp,
                                        const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
+                                       const std::vector<std::vector<int>> & offsets,
+                                       const size_t number_of_attractive_channels,
+                                       const std::vector<int> & image_shape,
                                        xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
+        // typedef
+        typedef std::tuple<float, uint64_t, uint64_t, uint64_t> PQElement;
+        auto pq_compare = [](PQElement left, PQElement right) {return std::get<0>(left) < std::get<0>(right);};
+        typedef std::priority_queue<PQElement, std::vector<PQElement>,
+                                    decltype(pq_compare)> EdgePriorityQueue;
+        typedef boost::disjoint_sets<uint64_t*, uint64_t*> NodeUnionFind;
 
         // casts
         const auto & edge_weights = edge_weight_exp.derived_cast();
@@ -359,7 +367,7 @@ namespace segmentation {
             int64_t stride = 0;
             for (int i = 0; i < offset.size(); ++i){
                 stride += offset[i] * array_stride[i];
-            }           
+            }
             offset_strides.push_back(stride);
         }
 
@@ -378,7 +386,7 @@ namespace segmentation {
 
         // start prim from top left node
         add_neighbours(0,
-                       offset_strides, 
+                       offset_strides,
                        number_of_nodes,
                        edge_weights,
                        valid_edges,
@@ -415,7 +423,7 @@ namespace segmentation {
             if(is_mutex) {
                 insert_mutex(ru, rv, edge_id, mutexes);
                 add_neighbours(v,
-                               offset_strides, 
+                               offset_strides,
                                number_of_nodes,
                                edge_weights,
                                valid_edges,
@@ -436,7 +444,7 @@ namespace segmentation {
                     }
                     merge_mutexes(rv, ru, mutexes);
                     add_neighbours(v,
-                                   offset_strides, 
+                                   offset_strides,
                                    number_of_nodes,
                                    edge_weights,
                                    valid_edges,

@@ -1,6 +1,13 @@
 import unittest
+from functools import partial
 import numpy as np
-from skimage.measure import label
+
+try:
+    from scipy.ndimage import convolve
+    WITH_SCIPY = True
+except ImportError:
+    WITH_SCIPY = False
+
 
 class TestMutexWatershed(unittest.TestCase):
 
@@ -38,69 +45,50 @@ class TestMutexWatershed(unittest.TestCase):
                                              edge_weights, mutex_weights)
         self.assertEqual(len(node_labels), number_of_labels)
 
+    def random_weights_test(self, mws_impl):
+        number_of_attractive_channels = 2
+        offsets = [[-1, 0], [0, -1], [-3, 0], [0, 3], [5, 5]]
+        weights = np.random.rand(len(offsets), 100, 100)
+        node_labels = mws_impl(weights, offsets,
+                               number_of_attractive_channels)
+        self.assertEqual(weights.shape[1:], node_labels.shape)
+        self.assertFalse((node_labels == 0).all())
+
     # test mutex watershed segmentation
     # with random edges and random mutex edges
-    def test_mws_segmentation_random_weights(self):
-        from affogato.segmentation import compute_mws_segmentation, compute_mws_prim_segmentation
-        import h5py
-        import scipy
+    def test_mws_segmentation_kruskal(self):
+        from affogato.segmentation import compute_mws_segmentation
+        self.random_weights_test(partial(compute_mws_segmentation, algorithm='kruskal'))
 
-        np.random.seed(100)
+    # test mutex watershed segmentation
+    # with random edges and random mutex edges
+    def test_mws_segmentation_prim(self):
+        from affogato.segmentation import compute_mws_segmentation
+        self.random_weights_test(partial(compute_mws_segmentation, algorithm='prim'))
+
+    def seg2edges(self, segmentation):
+        gx = convolve(segmentation + 1, np.array([-1., 1.]).reshape(1, 2))
+        gy = convolve(segmentation + 1, np.array([-1., 1.]).reshape(2, 1))
+        return ((gx ** 2 + gy ** 2) > 0)
+
+    @unittest.skipUnless(WITH_SCIPY, "Need scipy to compare segmentations")
+    def test_mws_consistency(self):
+        from affogato.segmentation import compute_mws_segmentation
         number_of_attractive_channels = 2
-        offsets = [[-1, 0], [0, -1], [-9, 0], [0, -9], [-9, -9], [9, -9],\
-                [-9, -4], [-4, -9], [4, -9], [9, -4], [-27, 0], [0, -27]]
-
-        offsets = [[-1, 0], [0, -1], [-9, 0]]
-        # offsets = [[-1, 0], [0, -1], [-2, 0], [0, -2]]
-        with h5py.File("im_131.h5", "r") as hpy:
-            weights = np.array(hpy["data"].value.astype("float64"))[:len(offsets)]
-            
-            weights[number_of_attractive_channels:] *= -1
-            weights[number_of_attractive_channels:] += 1
-
-        # compute mutex labeling
-        node_labels = compute_mws_segmentation(number_of_attractive_channels,
-                                               offsets,
-                                               weights)
-        number_of_colors = node_labels.size
-        cmap = np.random.randint(255, size=(3, number_of_colors))
-        scipy.misc.imsave(f"mws.png", np.moveaxis(cmap[:, node_labels], 0, -1))
-
-        import constrained_mst as cmst
-
-        sorted_edges = np.argsort(weights, axis=None)
-        sw = np.zeros_like(sorted_edges).ravel()
-        sw[sorted_edges] = np.arange(sorted_edges.size)
-        sw = sw.reshape(weights.shape)
-        print(sw)
-        # sw = sorted_edges[np.arange(weights.size)].reshape(weights.shape)
-
-        ssw = np.argsort(sw, axis=None)
-        # run the mst watershed
-        vol_shape = weights.shape[1:]
-        mst = cmst.ConstrainedWatershed(np.array(vol_shape),
-                                        offsets,
-                                        number_of_attractive_channels,
-                                        np.array([1, 1]))
-
-        mst.repulsive_mst_cut(sorted_edges[::-1])
-
-
-        scipy.misc.imsave(f"old_mws.png", np.moveaxis(cmap[:, mst.get_flat_label_image().reshape(vol_shape)], 0, -1))
-
-        node_labels_prim = compute_mws_prim_segmentation(number_of_attractive_channels,
-                                               offsets,
-                                               sw)
-
-        seg_image = cmap[:,  node_labels_prim]
-        scipy.misc.imsave(f"prim.png", np.moveaxis(seg_image, 0, -1))
-
-        with h5py.File("debug.h5", "w") as h5file:
-            h5file.create_dataset("sw", data=sw) 
-            h5file.create_dataset("weights", data=weights) 
-
-        self.assertEqual(weights.shape[1:], node_labels.shape)
-        np.testing.assert_array_equal(label(node_labels), label(node_labels_prim))
+        offsets = [[-1, 0], [0, -1], [-3, 0], [0, 3], [5, 5]]
+        weights = np.random.rand(len(offsets), 100, 100)
+        labels1 = compute_mws_segmentation(weights, offsets,
+                                           number_of_attractive_channels,
+                                           algorithm='kruskal')
+        labels2 = compute_mws_segmentation(weights, offsets,
+                                           number_of_attractive_channels,
+                                           algorithm='prim')
+        self.assertEqual(labels1.shape, labels2.shape)
+        # we compare the segmentations by checking that their aedges agree
+        edges1 = self.seg2edges(labels1)
+        edges2 = self.seg2edges(labels2)
+        print(np.isclose(edges1, edges2).sum(), '/', edges1.size)
+        self.assertTrue(np.allclose(edges1, edges2))
 
 
 if __name__ == '__main__':
