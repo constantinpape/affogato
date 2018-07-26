@@ -394,7 +394,6 @@ namespace segmentation {
                        visited,
                        pq);
 
-
         // iterate over all edges
         while(!pq.empty()) {
             // extract next element from the queue
@@ -460,8 +459,6 @@ namespace segmentation {
             node_labeling[label] = node_ufd.find_set(label);
         }
     }
-
-
 
 }
 }

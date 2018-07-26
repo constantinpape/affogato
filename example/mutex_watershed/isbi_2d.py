@@ -1,8 +1,11 @@
 import os
 import sys
 import time
-import h5py
+import argparse
+
 import numpy as np
+import h5py
+
 from scipy.ndimage import convolve
 from affogato.segmentation import compute_mws_segmentation
 
@@ -69,17 +72,21 @@ def view_res(data, labels):
 
 
 if __name__ == '__main__':
+    # TODO add more options to parser to allow for different data
+    parser = argparse.ArgumentParser()
+    parser.add_argument('path', type=str, help='path to example data (download from https://hcicloud.iwr.uni-heidelberg.de/index.php/s/6LuE7nxBN3EFRtL)')
+    args = parser.parse_args()
+    path = args.path
+    if os.path.isdir(path):
+        path = os.path.join(path, 'isbi_test_volume.h5')
+    assert os.path.exists(path), path
 
-    top_dir = '/home/cpape/Work/data/isbi2012'
-    raw_path = os.path.join(top_dir, 'isbi2012_test_volume.h5')
-    aff_path = os.path.join(top_dir,
-                            'isbi_test_offsetsV4_3d_meantda_damws2deval_final.h5')
-
-    slice_ = np.s_[0, :256, :256]
+    slice_ = np.s_[0, :512, :512]
     aff_slice = (slice(None),) + slice_
     # load affinities and invert the repulsive channels
-    with h5py.File(aff_path) as f:
-        affs = f['data'][aff_slice]
+    with h5py.File(path) as f:
+        raw = f['raw'][slice_]
+        affs = f['affinities'][aff_slice]
         affs[:3] *= -1
         affs[:3] += 1
     OFFSETS, keep_channels = get_2d_from_3d_offsets(OFFSETS)
@@ -115,8 +122,5 @@ if __name__ == '__main__':
     #     print("... in %f s" % t2)
     #     segs.append(seg2)
     #     labels.append('seg_mws_old')
-
-    with h5py.File(raw_path) as f:
-        raw = f['volumes/raw'][slice_]
 
     view_res([raw] + segs, labels)
