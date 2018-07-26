@@ -379,6 +379,11 @@ size_t compute_zws_segmentation(const xt::xexpression<WEIGHTS> & edge_weights_ex
     size_t n_labels = run_zws(edge_weights, node_weights, upper_threshold, labels_exp);
     // std::cout << n_labels << " labels after zws" << std::endl;
 
+    // if we don't do merging or size filtering, we can return here already
+    if(merge_threshold == 0 && size_threshold == 0) {
+        return n_labels;
+    }
+
     typedef std::pair<LabelType, LabelType> Link;
     std::unordered_map<Link, ValueType, boost::hash<Link>> region_weights;
     // std::cout << "get region weights" << std::endl;
