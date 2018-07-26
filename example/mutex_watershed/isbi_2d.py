@@ -49,11 +49,11 @@ def mws_segmentation_old(affs, stride=np.array([1, 1]),
     return segmentation, time.time() - t0
 
 
-def mws_segmentation(affs, algo):
+def mws_segmentation(affs, algo, strides=None):
     t0 = time.time()
     seperating_channel = 2
     seg = compute_mws_segmentation(affs, OFFSETS, seperating_channel,
-                                    algorithm=algo)
+                                    algorithm=algo, strides=strides)
     return seg, time.time() - t0
 
 
@@ -93,14 +93,14 @@ if __name__ == '__main__':
     affs = affs[keep_channels]
 
     print("Computing MWS segmentation ...")
-    seg0, t0 = mws_segmentation(affs, 'kruskal')
+    seg0, t0 = mws_segmentation(affs, 'kruskal', strides=[2, 2])
     edges0 = seg2edges(seg0)
     print("... in %f s" % t0)
     segs = [seg0]
     labels = ['raw', 'seg_mws']
 
     print("Computing Prim MWS segmentation ...")
-    seg1, t1 = mws_segmentation(affs, 'prim')
+    seg1, t1 = mws_segmentation(affs, 'prim', strides=[2, 2])
     edges1 = seg2edges(seg1)
     print("... in %f s" % t1)
     segs.append(seg1)
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         print("Prim and Kruskal segmentation agree")
     else:
         disagree = np.logical_not(np.isclose(edges0, edges1)).sum()
-        print("Prim and Kruskal segmentation dis-agree in %i / % i pixels" % (disagree, edges1.size()))
+        print("Prim and Kruskal segmentation dis-agree in %i / % i pixels" % (disagree, edges1.size))
 
     # if WITH_MWS:
     #     print("Computing old MWS segmentation ...")

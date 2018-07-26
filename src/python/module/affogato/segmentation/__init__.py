@@ -2,8 +2,8 @@ from ._segmentation import *
 import numpy as np
 
 
-# TODO: add strides and randomize bounds arguments
 def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
+                             strides=None, randomize_strides=False,
                              algorithm='kruskal'):
     assert algorithm in ('kruskal', 'prim'), "Unsupported algorithm, %s" % algorithm
     ndim = len(offsets[0])
@@ -20,13 +20,27 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
                                           for d in range(ndim))
             valid_edges[invalid_slice] = 0
 
-    # TODO: mask additional edges once we have strides
+    # TODO duble check with steffen
+    # mask additional edges once if we have strides
+    if strides is not None:
+        assert len(strides) == ndim
+        if randomize_strides:
+            stride_factor = np.prod(strides)
+            raise NotImplementedError("Randomized strides not implemented yet!")
+        else:
+            stride_edges = np.zeros_like(valid_edges, dtype='bool')
+            stride_edges[:number_of_attractive_channels] = 1
+            valid_slice = (slice(number_of_attractive_channels, None),) + tuple(slice(None, None, stride) for stride in strides)
+            stride_edges[valid_slice] = 1
+            valid_edges = np.logical_and(valid_edges, stride_edges)
 
     if algorithm == 'kruskal':
         # sort and flatten weights
-        # TODO: ignore masked weights during sorting
-        # we can maybe use np.ma for this
-        sorted_flat_indices = np.argsort(weights, axis=None)[::-1]
+        # ignore masked weights during sorting
+        masked_weights = np.ma.masked_array(weights, mask=np.logical_not(valid_edges))
+        sorted_flat_indices = np.argsort(masked_weights, axis=None)[::-1]
+        # sorted_flat_indices = np.argsort(weights, axis=None)[::-1]
+
         labels = compute_mws_segmentation_impl(sorted_flat_indices,
                                                valid_edges.ravel(),
                                                offsets,

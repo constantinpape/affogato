@@ -60,6 +60,10 @@ class TestMutexWatershed(unittest.TestCase):
         from affogato.segmentation import compute_mws_segmentation
         self.random_weights_test(partial(compute_mws_segmentation, algorithm='kruskal'))
 
+    def test_mws_segmentation_kruskal_strides(self):
+        from affogato.segmentation import compute_mws_segmentation
+        self.random_weights_test(partial(compute_mws_segmentation, algorithm='kruskal', strides=[2, 2]))
+
     # test mutex watershed segmentation
     # with random edges and random mutex edges
     def test_mws_segmentation_prim(self):
