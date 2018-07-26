@@ -1,15 +1,9 @@
-from ._segmentation import *
 import numpy as np
+from ._segmentation import *
 
 
-def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
-                             strides=None, randomize_strides=False,
-                             algorithm='kruskal'):
-    assert algorithm in ('kruskal', 'prim'), "Unsupported algorithm, %s" % algorithm
-    ndim = len(offsets[0])
-    assert all(len(off) == ndim for off in offsets)
-    image_shape = weights.shape[1:]
-
+# TODO duble check with steffen
+def get_valid_edges(shape, strides, randomize_strides):
     # compute valid edges
     valid_edges = np.ones(weights.shape, dtype=bool)
     for i, offset in enumerate(offsets):
@@ -20,19 +14,32 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
                                           for d in range(ndim))
             valid_edges[invalid_slice] = 0
 
-    # TODO duble check with steffen
-    # mask additional edges once if we have strides
+    # mask additional edges if we have strides
     if strides is not None:
         assert len(strides) == ndim
+        # TODO implement
         if randomize_strides:
             stride_factor = np.prod(strides)
             raise NotImplementedError("Randomized strides not implemented yet!")
         else:
             stride_edges = np.zeros_like(valid_edges, dtype='bool')
             stride_edges[:number_of_attractive_channels] = 1
-            valid_slice = (slice(number_of_attractive_channels, None),) + tuple(slice(None, None, stride) for stride in strides)
+            valid_slice = (slice(number_of_attractive_channels, None),) +\
+                tuple(slice(None, None, stride) for stride in strides)
             stride_edges[valid_slice] = 1
             valid_edges = np.logical_and(valid_edges, stride_edges)
+    return valid_edges
+
+
+def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
+                             strides=None, randomize_strides=False,
+                             algorithm='kruskal'):
+    assert algorithm in ('kruskal', 'prim'), "Unsupported algorithm, %s" % algorithm
+    ndim = len(offsets[0])
+    assert all(len(off) == ndim for off in offsets)
+    image_shape = weights.shape[1:]
+
+    valid_edges = get_valid_edges(weights.shape, strides, randomize_strides)
 
     if algorithm == 'kruskal':
         # sort and flatten weights

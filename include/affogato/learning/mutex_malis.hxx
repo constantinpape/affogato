@@ -11,8 +11,7 @@ namespace learning {
                                         const xt::xexpression<LABEL_ARRAY> & gt_labels_flat_exp,
                                         const std::vector<std::vector<int>> & offsets,
                                         const size_t number_of_attractive_channels,
-                                        const std::vector<int> & image_shape,
-                                        const bool pos,
+                                        const std::vector<int> & image_shape, const bool pos,
                                         xt::xexpression<GRADIENT_ARRAY> & gradient_exp) {
 
         typedef typename GRADIENT_ARRAY::value_type GradType;
@@ -121,7 +120,11 @@ namespace learning {
                 segmentation::insert_mutex(ru, rv, edge_id, mutexes);
 
                 // compute gradient for the mutex edge
-                // TODO
+                // compute gradients for the merge
+                GradType current_gradient = 0;
+                const auto w = flat_weights[edge_id];
+                // TODO sign if gradient ?!
+                const GradType grad = pos ? 1. - w : -w;
 
             } else {
 
@@ -178,6 +181,7 @@ namespace learning {
                 }
             }
         }
+        return loss;
     }
 
 }
