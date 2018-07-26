@@ -7,6 +7,7 @@
 
 #include "affogato/segmentation/mutex_watershed.hxx"
 #include "affogato/segmentation/connected_components.hxx"
+#include "affogato/segmentation/zwatershed.hxx"
 
 namespace py = pybind11;
 
@@ -16,6 +17,7 @@ PYBIND11_MODULE(_segmentation, m)
     m.doc() = "segmentation module of affogato";
 
     using namespace affogato;
+
 
     m.def("connected_components", [](const xt::pyarray<float> & affinities,
                                      const float threshold) {
@@ -103,4 +105,29 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("offsets"),
        py::arg("number_of_attractive_channels"),
        py::arg("image_shape"));
+
+
+    m.def("compute_zws_segmentation",[](const xt::pyarray<float> & edge_weights,
+							            const double lower_threshold,
+        					            const double upper_threshold,
+							            const double merge_threshold,
+        					            const size_t size_threshold) {
+
+        typedef typename xt::pyarray<uint64_t>::shape_type ShapeType;
+        ShapeType shape(edge_weights.shape().begin() + 1, edge_weights.shape().end());
+
+        size_t n_labels;
+        xt::pyarray<uint64_t> labels = xt::zeros<uint64_t>(shape);
+        {
+            py::gil_scoped_release allowThreads;
+            n_labels = segmentation::compute_zws_segmentation(edge_weights,
+                                                              lower_threshold, upper_threshold,
+                                                              merge_threshold, size_threshold, labels);
+        }
+        return std::make_pair(labels, n_labels);
+    }, py::arg("edge_weights"),
+       py::arg("lower_threshold"),
+       py::arg("upper_threshold"),
+       py::arg("size_threshold"),
+       py::arg("merge_threshold"));
 }

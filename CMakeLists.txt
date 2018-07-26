@@ -17,6 +17,10 @@ if(NOT HAS_CPP14_FLAG)
 endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
+# This should make the visbility warnings go away,
+# but does not do it
+# set(CMAKE_CXX_VISIBILITY_PREFIX default)
+
 
 # set default build type
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
