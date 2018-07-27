@@ -312,16 +312,18 @@ namespace segmentation {
                 }
             }
 
+            // check that position - offset_stride lies within 0 and number_of_nodes
+            const bool within_bounds = (offset_strides[i] > 0 or position < number_of_nodes + offset_strides[i])
+                                    and (offset_strides[i] < 0 or offset_strides[i] <= position);
+
             // go in negative offset direction
-            if (offset_strides[i] >= position){
+            if (within_bounds){
                 const uint64_t neg_neighbour = position - offset_strides[i];
-                if (neg_neighbour < number_of_nodes){
-                    const uint64_t neg_edge_id = neg_neighbour + i * number_of_nodes;
-                    if (valid_edges(neg_edge_id) and !visited(neg_edge_id)){
-                        const uint64_t rv = ufd.find_set(neg_neighbour);
-                        if (ru != rv){
-                            pq.push(std::make_tuple(edge_weights(neg_edge_id), neg_edge_id, position, neg_neighbour));
-                        }
+                const uint64_t neg_edge_id = neg_neighbour + i * number_of_nodes;
+                if (valid_edges(neg_edge_id) and !visited(neg_edge_id)){
+                    const uint64_t rv = ufd.find_set(neg_neighbour);
+                    if (ru != rv){
+                        pq.push(std::make_tuple(edge_weights(neg_edge_id), neg_edge_id, position, neg_neighbour));
                     }
                 }
             }
