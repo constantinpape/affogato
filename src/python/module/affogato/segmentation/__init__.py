@@ -3,9 +3,12 @@ from ._segmentation import *
 
 
 # TODO duble check with steffen
-def get_valid_edges(shape, strides, randomize_strides):
+def get_valid_edges(shape, offsets, number_of_attractive_channels,
+                    strides, randomize_strides):
     # compute valid edges
-    valid_edges = np.ones(weights.shape, dtype=bool)
+    ndim = len(offsets[0])
+    image_shape = shape[1:]
+    valid_edges = np.ones(shape, dtype=bool)
     for i, offset in enumerate(offsets):
         for j, o in enumerate(offset):
             # invalid_slice = (i, ) + i * (slice(None), ) + slice(o)
@@ -39,7 +42,8 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
     assert all(len(off) == ndim for off in offsets)
     image_shape = weights.shape[1:]
 
-    valid_edges = get_valid_edges(weights.shape, strides, randomize_strides)
+    valid_edges = get_valid_edges(weights.shape, offsets, number_of_attractive_channels,
+                                  strides, randomize_strides)
 
     if algorithm == 'kruskal':
         # sort and flatten weights
