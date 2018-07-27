@@ -11,7 +11,8 @@ def mutex_malis(weights, gt_labels, offsets,
     assert all(len(off) == ndim for off in offsets)
     image_shape = weights.shape[1:]
 
-    valid_edges = get_valid_edges(weights.shape, strides, randomize_strides)
+    valid_edges = get_valid_edges(weights.shape, offsets, number_of_attractive_channels,
+                                  strides, randomize_strides)
     masked_weights = np.ma.masked_array(weights, mask=np.logical_not(valid_edges))
     sorted_flat_indices = np.argsort(masked_weights, axis=None)[::-1]
 
