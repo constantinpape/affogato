@@ -47,6 +47,7 @@ PYBIND11_MODULE(_learning, m)
        py::arg("offsets"),
        py::arg("pass")=0);
 
+
     m.def("compute_malis_3d", [](const xt::pytensor<float, 4> & affinities,
                                  const xt::pytensor<uint64_t, 3> & labels,
                                  const std::vector<std::vector<int>> & offsets,
@@ -91,10 +92,14 @@ PYBIND11_MODULE(_learning, m)
         {
             // TODO properly switch between the passes
             py::gil_scoped_release allowThreads;
-            loss = learning::compute_mutex_malis_gradient(flat_weights, sorted_flat_indices,
-                                                          valid_edges, gt_labels,
-                                                          offsets, number_of_attractive_channels,
-                                                          image_shape, 0, gradients);
+            // loss = learning::compute_mutex_malis_gradient(flat_weights, sorted_flat_indices,
+            //                                               valid_edges, gt_labels,
+            //                                               offsets, number_of_attractive_channels,
+            //                                               image_shape, 0, gradients);
+            loss = learning::constrained_mutex_malis(flat_weights, sorted_flat_indices,
+                                                     valid_edges, gt_labels,
+                                                     offsets, number_of_attractive_channels,
+                                                     image_shape, gradients);
         }
         return std::make_pair(loss, gradients);
     }, py::arg("flat_weights"),

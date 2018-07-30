@@ -91,7 +91,7 @@ class TestMutexWatershed(unittest.TestCase):
         # we compare the segmentations by checking that their aedges agree
         edges1 = self.seg2edges(labels1)
         edges2 = self.seg2edges(labels2)
-        print(np.isclose(edges1, edges2).sum(), '/', edges1.size)
+        # print(np.isclose(edges1, edges2).sum(), '/', edges1.size)
         self.assertTrue(np.allclose(edges1, edges2))
 
 

@@ -41,18 +41,12 @@ namespace segmentation {
     template<class MUTEX_STORAGE>
     inline void insert_mutex(const uint64_t ru, const uint64_t rv,
                              const uint64_t mutex_edge_id, MUTEX_STORAGE & mutexes) {
-        // in order to keep the mutex vectors handy, we only insert the mutex edge,
-        // if the two sets don't share a mutex yet
-        if (!check_mutex(ru, rv, mutexes)){
-            mutexes[ru].insert(std::upper_bound(mutexes[ru].begin(),
-                                                mutexes[ru].end(),
-                                                mutex_edge_id),
-                                mutex_edge_id);
-            mutexes[rv].insert(std::upper_bound(mutexes[rv].begin(),
-                                                mutexes[rv].end(),
-                                                mutex_edge_id),
-                                mutex_edge_id);
-        }
+        mutexes[ru].insert(std::upper_bound(mutexes[ru].begin(),
+                                            mutexes[ru].end(),
+                                            mutex_edge_id), mutex_edge_id);
+        mutexes[rv].insert(std::upper_bound(mutexes[rv].begin(),
+                                            mutexes[rv].end(),
+                                            mutex_edge_id), mutex_edge_id);
     }
 
 
@@ -127,55 +121,44 @@ namespace segmentation {
         for(const size_t edge_id : indices) {
 
             // check whether this edge is mutex via the edge offset
-            const bool is_mutex = edge_id >= num_edges;
+            const bool is_mutex_edge = edge_id >= num_edges;
 
-            if(is_mutex) {
-                // find the mutex id and the connected nodes
-                const size_t mutex_id = edge_id - num_edges;
-                const uint64_t u = mutex_uvs(mutex_id, 0);
-                const uint64_t v = mutex_uvs(mutex_id, 1);
+            // find the edge-id or mutex id and the connected nodes
+            const size_t id = is_mutex_edge ? edge_id - num_edges : edge_id;
+            const uint64_t u = mutex_uvs(id, 0);
+            const uint64_t v = mutex_uvs(id, 1);
 
-                // find the current representatives
-                const uint64_t ru = ufd.find_set(u);
-                const uint64_t rv = ufd.find_set(v);
+            // find the current representatives
+            uint64_t ru = ufd.find_set(u);
+            uint64_t rv = ufd.find_set(v);
 
-                // if the nodes are already connected, do nothing
-                if(ru == rv) {
-                    continue;
-                }
+            // if the nodes are already connected, do nothing
+            if(ru == rv) {
+                continue;
+            }
 
-                // otherwise, insert the mutex
-                insert_mutex(ru, rv, mutex_id, mutexes);
+            // if we already have a mutex, we do not need to do anything
+            // (if this is a regular edge, we do not link, if it is a mutex edge
+            //  we do not need to insert the redundant mutex constraint)
+            if(check_mutex(ru, rv, mutexes)) {
+                continue;
+            }
+
+            if(is_mutex_edge) {
+
+                // insert mutex constraint
+                insert_mutex(ru, rv, id, mutexes);
 
             } else {
 
-                // find the connected nodes
-                const uint64_t u = uvs(edge_id, 0);
-                const uint64_t v = uvs(edge_id, 1);
-
-                // find the current representatives
-                uint64_t ru = ufd.find_set(u);
-                uint64_t rv = ufd.find_set(v);
-
-                // if the nodes are already connected, do nothing
-                if(ru == rv) {
-                    continue;
+                // link the nodes and merge their mutex constraints
+                ufd.link(u, v);
+                // check  if we have to swap the roots
+                if(ufd.find_set(ru) == rv) {
+                    std::swap(ru, rv);
                 }
-
-                // otherwise, check if we have an active constraint / mutex edge
-                const bool have_mutex = check_mutex(ru, rv, mutexes);
-
-                // only merge if we don't have a mutex
-                if(!have_mutex) {
-                    ufd.link(u, v);
-                    // check  if we have to swap the roots
-                    if(ufd.find_set(ru) == rv) {
-                        std::swap(ru, rv);
-                    }
-                    // merge mutexes from rv -> ru
-                    merge_mutexes(rv, ru, mutexes);
-                }
-
+                // merge mutexes from rv -> ru
+                merge_mutexes(rv, ru, mutexes);
             }
         }
 
@@ -242,7 +225,7 @@ namespace segmentation {
             }
 
             // check whether this edge is mutex via the edge offset
-            const bool is_mutex = edge_id >= number_of_attractive_edges;
+            const bool is_mutex_edge = edge_id >= number_of_attractive_edges;
 
             // get nodes connected by edge of edge_id
 
@@ -259,26 +242,27 @@ namespace segmentation {
                 continue;
             }
 
-            if(is_mutex) {
+            // if we already have a mutex, we do not need to do anything
+            // (if this is a regular edge, we do not link, if it is a mutex edge
+            //  we do not need to insert the redundant mutex constraint)
+            if(check_mutex(ru, rv, mutexes)) {
+                continue;
+            }
+
+            if(is_mutex_edge) {
 
                 // insert the mutex edge into both mutex edge storages
                 insert_mutex(ru, rv, edge_id, mutexes);
 
             } else {
 
-                // otherwise, check if we have an active constraint / mutex edge
-                const bool have_mutex = check_mutex(ru, rv, mutexes);
-
-                // only merge if we don't have a mutex
-                if(!have_mutex) {
-                    ufd.link(u, v);
-                    // check  if we have to swap the roots
-                    if(ufd.find_set(ru) == rv) {
-                        std::swap(ru, rv);
-                    }
-                    // merge mutexes from rv -> ru
-                    merge_mutexes(rv, ru, mutexes);
+                ufd.link(u, v);
+                // check  if we have to swap the roots
+                if(ufd.find_set(ru) == rv) {
+                    std::swap(ru, rv);
                 }
+                // merge mutexes from rv -> ru
+                merge_mutexes(rv, ru, mutexes);
             }
         }
 
@@ -419,41 +403,35 @@ namespace segmentation {
             }
 
             // check whether this edge is mutex via the edge offset
-            const bool is_mutex = edge_id >= number_of_attractive_edges;
+            const bool is_mutex_edge = edge_id >= number_of_attractive_edges;
 
-            if(is_mutex) {
-                insert_mutex(ru, rv, edge_id, mutexes);
-                add_neighbours(v,
-                               offset_strides,
-                               number_of_nodes,
-                               edge_weights,
-                               valid_edges,
-                               node_ufd,
-                               visited,
-                               pq);
-            } else {
-                // otherwise, check if we have an active constraint / mutex edge
-                const bool have_mutex = check_mutex(ru, rv, mutexes);
-
-                //const bool have_mutex = check_mutex_edge(u, v, mutexes);
-                // only merge if we don't have a mutex
-                if(!have_mutex) {
-                    node_ufd.link(u, v);
-                    // check  if we have to swap the roots
-                    if(node_ufd.find_set(ru) == rv) {
-                        std::swap(ru, rv);
-                    }
-                    merge_mutexes(rv, ru, mutexes);
-                    add_neighbours(v,
-                                   offset_strides,
-                                   number_of_nodes,
-                                   edge_weights,
-                                   valid_edges,
-                                   node_ufd,
-                                   visited,
-                                   pq);
-                }
+            // if we already have a mutex, we do not need to do anything
+            // (if this is a regular edge, we do not link, if it is a mutex edge
+            //  we do not need to insert the redundant mutex constraint)
+            if(check_mutex(ru, rv, mutexes)) {
+                continue;
             }
+
+            if(is_mutex_edge) {
+                insert_mutex(ru, rv, edge_id, mutexes);
+            } else {
+
+                node_ufd.link(u, v);
+                // check  if we have to swap the roots
+                if(node_ufd.find_set(ru) == rv) {
+                    std::swap(ru, rv);
+                }
+                merge_mutexes(rv, ru, mutexes);
+            }
+            // add the next node to pq
+            add_neighbours(v,
+                           offset_strides,
+                           number_of_nodes,
+                           edge_weights,
+                           valid_edges,
+                           node_ufd,
+                           visited,
+                           pq);
         }
 
         // get node labeling into output
