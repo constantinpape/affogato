@@ -1,114 +1,81 @@
 #pragma once
 #include <boost/pending/disjoint_sets.hpp>
 #include "xtensor/xtensor.hpp"
-
+#include <queue>
+#include <functional>
 
 namespace affogato {
 namespace segmentation {
 
-    // the datastructure to hold the mutex edges for a single cluster and all clusters
-    typedef std::unordered_set<uint32_t> MutexSet;
-    typedef std::vector<MutexSet> MutexStorage;
+    //
+    // mutex helper functions:
+    // check_mutex: check if mutex exists between two representatives
+    // insert_mutex: insert mutex between two representatives
+    // merge_mutexex: merge mutex constrained of two mutex stores
+    //
 
 
-    template<class UFD>
-    inline bool check_mutex(const uint32_t u, const uint32_t rv,
-                            UFD & ufd, const MutexStorage & mutexes) {
-        // the mutex storages are symmetric, so we only need to check one of them
-        const auto & mutex_u = mutexes[u];
-        bool have_mutex = false;
-        // we check for all representatives of mutex edges if
-        // they are the same as the reperesentative of v
-        for(const auto mu : mutex_u) {
-            if(ufd.find_set(mu) == rv) {
-                have_mutex = true;
-                break;
-            }
-        }
-        return have_mutex;
-    }
+    template<class MUTEX_STORAGE>
+    inline bool check_mutex(const uint64_t ru, const uint64_t rv,
+                            const MUTEX_STORAGE & mutexes) {
+        // get iterators to the mutex vectors of rep u and rep v
+        auto mutex_it_u = mutexes[ru].begin();
+        auto mutex_it_v = mutexes[rv].begin();
 
-
-    template<class UFD>
-    inline void insert_mutex(const uint32_t u, const uint32_t v, const uint32_t rv,
-                             UFD & ufd, MutexStorage & mutexes) {
-
-        auto & mutex_u = mutexes[u];
-        // if we don't have a mutex yet, insert it
-        if(mutex_u.size() == 0) {
-            mutex_u.insert(v);
-        }
-
-        // otherwise check if v is already in the mutexes
-        // and filter the mutexes in the process
-        else {
-
-            bool have_mutex = false;
-            std::unordered_set<uint32_t> mutex_representatives;
-
-            // iterate over all current mutexes
-            auto mutex_it = mutex_u.begin();
-            while(mutex_it != mutex_u.end()) {
-                const uint32_t rm = ufd.find_set(*mutex_it);
-
-                // check if this mutex is already present in the list
-                // if it is not, insert it, otherwise delete this mutex
-                if(mutex_representatives.find(rm) == mutex_representatives.end()) {
-                    mutex_representatives.insert(rm);
-                    ++mutex_it;  // we don't erase, so we need to increase by hand
-                } else {
-                    mutex_it = mutex_u.erase(mutex_it);
+        // check if the mutex vectors contain the same mutex edge
+        while (mutex_it_u != mutexes[ru].end() && mutex_it_v != mutexes[rv].end()) {
+            if (*mutex_it_u < *mutex_it_v) {
+                ++mutex_it_u;
+            } else  {
+                if (!(*mutex_it_v < *mutex_it_u)) {
+                    return true;
                 }
-
-                // if we have not already found v as mutex, check for it
-                if(!have_mutex) {
-                    have_mutex = rv == rm;
-                }
-            }
-
-            // insert the v mutex if it is not present
-            if(!have_mutex) {
-                // std::cout << "Inserting mutex " << u << " " << v << std::endl;
-                mutex_u.insert(v);
+                ++mutex_it_v;
             }
         }
+        return false;
     }
 
 
-    template<class UFD>
-    inline void merge_mutexes(const uint32_t u, const uint32_t v,
-                              UFD & ufd, MutexStorage & mutexes) {
-        auto & mutex_u = mutexes[u];
-        auto & mutex_v = mutexes[v];
-
-        // extract all representatives (which should be unique here)
-        std::unordered_map<uint32_t, uint32_t> mutex_reps_u;
-        for(const auto mu : mutex_u) {
-            mutex_reps_u[ufd.find_set(mu)] = mu;
-        }
-
-        std::unordered_map<uint32_t, uint32_t> mutex_reps_v;
-        for(const auto mv : mutex_v) {
-            mutex_reps_v[ufd.find_set(mv)] = mv;
-        }
-
-        // merge u into v
-        for(const auto mu : mutex_reps_u) {
-            if(mutex_reps_v.find(mu.first) == mutex_reps_v.end()) {
-                mutex_v.insert(mu.second);
-            }
-        }
-
-        // merge v into u
-        for(const auto mv : mutex_reps_v) {
-            if(mutex_reps_u.find(mv.first) == mutex_reps_u.end()) {
-                mutex_u.insert(mv.second);
-            }
-        }
-
+    // insert 'mutex_edge_id' into the vectors containing mutexes of 'ru' and 'rv'
+    template<class MUTEX_STORAGE>
+    inline void insert_mutex(const uint64_t ru, const uint64_t rv,
+                             const uint64_t mutex_edge_id, MUTEX_STORAGE & mutexes) {
+        mutexes[ru].insert(std::upper_bound(mutexes[ru].begin(),
+                                            mutexes[ru].end(),
+                                            mutex_edge_id), mutex_edge_id);
+        mutexes[rv].insert(std::upper_bound(mutexes[rv].begin(),
+                                            mutexes[rv].end(),
+                                            mutex_edge_id), mutex_edge_id);
     }
 
 
+    // merge the mutex edges by merging from 'root_from' to 'root_to'
+    template<class MUTEX_STORAGE>
+    inline void merge_mutexes(const uint64_t root_from, const uint64_t root_to,
+                              MUTEX_STORAGE & mutexes) {
+        if (mutexes[root_from].size() == 0) {
+            return;
+        }
+
+        if (mutexes[root_to].size() == 0){
+            mutexes[root_to] = mutexes[root_from];
+            return;
+        }
+
+        std::vector<uint64_t> merge_buffer;
+        merge_buffer.reserve(std::max(mutexes[root_from].size(), mutexes[root_to].size()));
+
+        std::merge(mutexes[root_from].begin(), mutexes[root_from].end(),
+                   mutexes[root_to].begin(), mutexes[root_to].end(),
+                   std::back_inserter(merge_buffer));
+
+        mutexes[root_to] = merge_buffer;
+        mutexes[root_from].clear();
+    }
+
+
+    // compute mutex clustering for a graph with attrative and mutex edges
     template<class EDGE_ARRAY, class WEIGHT_ARRAY, class NODE_ARRAY>
     void compute_mws_clustering(const size_t number_of_labels,
                                 const xt::xexpression<EDGE_ARRAY> & uvs_exp,
@@ -146,58 +113,52 @@ namespace segmentation {
             return val_a < val_b;
         });
 
+        // data-structure storing mutex edges
+        typedef std::vector<std::vector<uint64_t>> MutexStorage;
         MutexStorage mutexes(number_of_labels);
 
         // iterate over all edges
         for(const size_t edge_id : indices) {
 
             // check whether this edge is mutex via the edge offset
-            const bool is_mutex = edge_id >= num_edges;
+            const bool is_mutex_edge = edge_id >= num_edges;
 
-            if(is_mutex) {
-                // find the mutex id and the connected nodes
-                const size_t mutex_id = edge_id - num_edges;
-                const uint32_t u = mutex_uvs(mutex_id, 0);
-                const uint32_t v = mutex_uvs(mutex_id, 1);
+            // find the edge-id or mutex id and the connected nodes
+            const size_t id = is_mutex_edge ? edge_id - num_edges : edge_id;
+            const uint64_t u = mutex_uvs(id, 0);
+            const uint64_t v = mutex_uvs(id, 1);
 
-                // find the current representatives
-                const uint32_t ru = ufd.find_set(u);
-                const uint32_t rv = ufd.find_set(v);
+            // find the current representatives
+            uint64_t ru = ufd.find_set(u);
+            uint64_t rv = ufd.find_set(v);
 
-                // if the nodes are already connected, do nothing
-                if(ru == rv) {
-                    continue;
-                }
+            // if the nodes are already connected, do nothing
+            if(ru == rv) {
+                continue;
+            }
 
-                // otherwise, insert the mutex
-                insert_mutex(u, v, rv, ufd, mutexes);
-                insert_mutex(v, u, ru, ufd, mutexes);
+            // if we already have a mutex, we do not need to do anything
+            // (if this is a regular edge, we do not link, if it is a mutex edge
+            //  we do not need to insert the redundant mutex constraint)
+            if(check_mutex(ru, rv, mutexes)) {
+                continue;
+            }
+
+            if(is_mutex_edge) {
+
+                // insert mutex constraint
+                insert_mutex(ru, rv, id, mutexes);
 
             } else {
 
-                // find the connected nodes
-                const uint32_t u = uvs(edge_id, 0);
-                const uint32_t v = uvs(edge_id, 1);
-
-                // find the current representatives
-                const uint32_t ru = ufd.find_set(u);
-                const uint32_t rv = ufd.find_set(v);
-
-                // if the nodes are already connected, do nothing
-                if(ru == rv) {
-                    continue;
+                // link the nodes and merge their mutex constraints
+                ufd.link(u, v);
+                // check  if we have to swap the roots
+                if(ufd.find_set(ru) == rv) {
+                    std::swap(ru, rv);
                 }
-
-                // otherwise, check if we have an active constraint / mutex edge
-                const bool have_mutex = check_mutex(u, rv, ufd, mutexes) || check_mutex(v, ru, ufd, mutexes);
-                //const bool have_mutex = check_mutex_edge(u, v, mutexes);
-
-                // only merge if we don't have a mutex
-                if(!have_mutex) {
-                    ufd.link(u, v);
-                    merge_mutexes(u, v, ufd, mutexes);
-                }
-
+                // merge mutexes from rv -> ru
+                merge_mutexes(rv, ru, mutexes);
             }
         }
 
@@ -207,12 +168,14 @@ namespace segmentation {
         }
     }
 
+
+    // compute mutex segmentation via kruskal
     template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
-    void compute_mws_segmentation(const size_t number_of_attractive_channels,
-                                  const std::vector<std::vector<int>> & offsets,
-                                  const std::vector<int> & image_shape,
-                                  const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
+    void compute_mws_segmentation(const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
                                   const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
+                                  const std::vector<std::vector<int>> & offsets,
+                                  const size_t number_of_attractive_channels,
+                                  const std::vector<int> & image_shape,
                                   xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
 
         // casts
@@ -220,12 +183,11 @@ namespace segmentation {
         const auto & valid_edges = valid_edges_exp.derived_cast();
         auto & node_labeling = node_labeling_exp.derived_cast();
 
-
+        // determine number of nodes and attractive edges
         const size_t number_of_nodes = node_labeling.size();
         const size_t number_of_attractive_edges = number_of_nodes * number_of_attractive_channels;
         const size_t number_of_offsets = offsets.size();
         const size_t ndims = offsets[0].size();
-
 
         std::vector<int64_t> array_stride(ndims);
         int64_t current_stride = 1;
@@ -251,58 +213,56 @@ namespace segmentation {
             ufd.make_set(label);
         }
 
+        // data-structure storing mutex edges
+        typedef std::vector<std::vector<uint64_t>> MutexStorage;
         MutexStorage mutexes(number_of_nodes);
 
         // iterate over all edges
         for(const size_t edge_id : sorted_flat_indices) {
 
-            if (not valid_edges(edge_id)) continue;
+            if(!valid_edges(edge_id)){
+                continue;
+            }
 
             // check whether this edge is mutex via the edge offset
-            const bool is_mutex = edge_id >= number_of_attractive_edges;
+            const bool is_mutex_edge = edge_id >= number_of_attractive_edges;
 
             // get nodes connected by edge of edge_id
 
             // const auto affCoord_ = xt::unravel_from_strides(edge_id, strides, layout);
-            uint64_t u = edge_id % number_of_nodes;
-            uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+            const uint64_t u = edge_id % number_of_nodes;
+            const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
 
-            if(is_mutex) {
+            // find the current representatives
+            uint64_t ru = ufd.find_set(u);
+            uint64_t rv = ufd.find_set(v);
 
-                // find the current representatives
-                const uint64_t ru = ufd.find_set(u);
-                const uint64_t rv = ufd.find_set(v);
+            // if the nodes are already connected, do nothing
+            if(ru == rv) {
+                continue;
+            }
 
-                // if the nodes are already connected, do nothing
-                if(ru == rv) {
-                    continue;
-                }
+            // if we already have a mutex, we do not need to do anything
+            // (if this is a regular edge, we do not link, if it is a mutex edge
+            //  we do not need to insert the redundant mutex constraint)
+            if(check_mutex(ru, rv, mutexes)) {
+                continue;
+            }
 
-                // otherwise, insert the mutex
-                insert_mutex(u, v, rv, ufd, mutexes);
-                insert_mutex(v, u, ru, ufd, mutexes);
+            if(is_mutex_edge) {
+
+                // insert the mutex edge into both mutex edge storages
+                insert_mutex(ru, rv, edge_id, mutexes);
 
             } else {
 
-                // find the current representatives
-                const uint64_t ru = ufd.find_set(u);
-                const uint64_t rv = ufd.find_set(v);
-
-                // if the nodes are already connected, do nothing
-                if(ru == rv) {
-                    continue;
+                ufd.link(u, v);
+                // check  if we have to swap the roots
+                if(ufd.find_set(ru) == rv) {
+                    std::swap(ru, rv);
                 }
-
-                // otherwise, check if we have an active constraint / mutex edge
-                const bool have_mutex = check_mutex(u, rv, ufd, mutexes) || check_mutex(v, ru, ufd, mutexes);
-                //const bool have_mutex = check_mutex_edge(u, v, mutexes);
-
-                // only merge if we don't have a mutex
-                if(!have_mutex) {
-                    ufd.link(u, v);
-                    merge_mutexes(u, v, ufd, mutexes);
-                }
-
+                // merge mutexes from rv -> ru
+                merge_mutexes(rv, ru, mutexes);
             }
         }
 
@@ -312,6 +272,173 @@ namespace segmentation {
         }
     }
 
+    // helper function for mws prim implementation:
+    // add all neighbors of given node to the priority queue
+    template <class WEIGHT_ARRAY, class VALID_ARRAY, class UFD, class PRIORITY_QUEUE>
+    inline void add_neighbours(const uint64_t & position,
+                               const std::vector<int64_t> & offset_strides,
+                               const size_t & number_of_nodes,
+                               const WEIGHT_ARRAY & edge_weights,
+                               const VALID_ARRAY & valid_edges,
+                               UFD & ufd,
+                               xt::pytensor<bool, 1> & visited,
+                               PRIORITY_QUEUE & pq){
+
+        const uint64_t ru = ufd.find_set(position);
+        for(int i = 0; i < offset_strides.size(); ++i){
+            // go in positive offset direction
+            const uint64_t edge_id = position + i * number_of_nodes;
+            if (valid_edges(edge_id) and !visited(edge_id)){
+                const uint64_t neighbour = position + offset_strides[i];
+                const uint64_t rv = ufd.find_set(neighbour);
+                if (ru != rv){
+                    pq.push(std::make_tuple(edge_weights(edge_id), edge_id, position, neighbour));
+                }
+            }
+
+            // check that position - offset_stride lies within 0 and number_of_nodes
+            const bool within_bounds = (offset_strides[i] > 0 or position < number_of_nodes + offset_strides[i])
+                                    and (offset_strides[i] < 0 or offset_strides[i] <= position);
+
+            // go in negative offset direction
+            if (within_bounds){
+                const uint64_t neg_neighbour = position - offset_strides[i];
+                const uint64_t neg_edge_id = neg_neighbour + i * number_of_nodes;
+                if (valid_edges(neg_edge_id) and !visited(neg_edge_id)){
+                    const uint64_t rv = ufd.find_set(neg_neighbour);
+                    if (ru != rv){
+                        pq.push(std::make_tuple(edge_weights(neg_edge_id), neg_edge_id, position, neg_neighbour));
+                    }
+                }
+            }
+        }
+    }
+
+
+    // compute mutex segmentation via prim's algorithm
+    template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
+    void compute_mws_prim_segmentation(const xt::xexpression<WEIGHT_ARRAY> & edge_weight_exp,
+                                       const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
+                                       const std::vector<std::vector<int>> & offsets,
+                                       const size_t number_of_attractive_channels,
+                                       const std::vector<int> & image_shape,
+                                       xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
+        // typedef
+        typedef std::tuple<float, uint64_t, uint64_t, uint64_t> PQElement;
+        auto pq_compare = [](PQElement left, PQElement right) {return std::get<0>(left) < std::get<0>(right);};
+        typedef std::priority_queue<PQElement, std::vector<PQElement>,
+                                    decltype(pq_compare)> EdgePriorityQueue;
+        typedef boost::disjoint_sets<uint64_t*, uint64_t*> NodeUnionFind;
+
+        // casts
+        const auto & edge_weights = edge_weight_exp.derived_cast();
+        const auto & valid_edges = valid_edges_exp.derived_cast();
+        auto & node_labeling = node_labeling_exp.derived_cast();
+
+        const size_t number_of_nodes = node_labeling.size();
+        const size_t number_of_attractive_edges = number_of_nodes * number_of_attractive_channels;
+        const size_t number_of_offsets = offsets.size();
+        const size_t ndims = offsets[0].size();
+        xt::pytensor<bool, 1> visited = xt::zeros<bool>({edge_weights.size()});
+
+        std::vector<int64_t> array_stride(ndims);
+        int64_t current_stride = 1;
+        for (int i = ndims-1; i >= 0; --i){
+            array_stride[i] = current_stride;
+            current_stride *= image_shape[i];
+        }
+
+        std::vector<int64_t> offset_strides;
+        for (const auto & offset: offsets){
+            int64_t stride = 0;
+            for (int i = 0; i < offset.size(); ++i){
+                stride += offset[i] * array_stride[i];
+            }
+            offset_strides.push_back(stride);
+        }
+
+        // make ufd
+        std::vector<uint64_t> ranks(number_of_nodes);
+        std::vector<uint64_t> parents(number_of_nodes);
+        NodeUnionFind node_ufd(&ranks[0], &parents[0]);
+        for(uint64_t label = 0; label < number_of_nodes; ++label) {
+            node_ufd.make_set(label);
+        }
+
+        // data-structure storing mutex edges
+        typedef std::vector<std::vector<uint64_t>> MutexStorage;
+        MutexStorage mutexes(number_of_nodes);
+        EdgePriorityQueue pq(pq_compare);
+
+        // start prim from top left node
+        add_neighbours(0,
+                       offset_strides,
+                       number_of_nodes,
+                       edge_weights,
+                       valid_edges,
+                       node_ufd,
+                       visited,
+                       pq);
+
+        // iterate over all edges
+        while(!pq.empty()) {
+            // extract next element from the queue
+            const PQElement position_vector = pq.top();
+            pq.pop();
+            const uint64_t edge_id = std::get<1>(position_vector);
+            const uint64_t u = std::get<2>(position_vector);
+            const uint64_t v = std::get<3>(position_vector);
+
+            if(visited(edge_id)) {
+                continue;
+            }
+            visited(edge_id) = 1;
+
+            // find the current representatives
+            // and skip if roots are identical
+            uint64_t ru = node_ufd.find_set(u);
+            uint64_t rv = node_ufd.find_set(v);
+            if(ru == rv) {
+                continue;
+            }
+
+            // check whether this edge is mutex via the edge offset
+            const bool is_mutex_edge = edge_id >= number_of_attractive_edges;
+
+            // if we already have a mutex, we do not need to do anything
+            // (if this is a regular edge, we do not link, if it is a mutex edge
+            //  we do not need to insert the redundant mutex constraint)
+            if(check_mutex(ru, rv, mutexes)) {
+                continue;
+            }
+
+            if(is_mutex_edge) {
+                insert_mutex(ru, rv, edge_id, mutexes);
+            } else {
+
+                node_ufd.link(u, v);
+                // check  if we have to swap the roots
+                if(node_ufd.find_set(ru) == rv) {
+                    std::swap(ru, rv);
+                }
+                merge_mutexes(rv, ru, mutexes);
+            }
+            // add the next node to pq
+            add_neighbours(v,
+                           offset_strides,
+                           number_of_nodes,
+                           edge_weights,
+                           valid_edges,
+                           node_ufd,
+                           visited,
+                           pq);
+        }
+
+        // get node labeling into output
+        for(size_t label = 0; label < number_of_nodes; ++label) {
+            node_labeling[label] = node_ufd.find_set(label);
+        }
+    }
 
 }
 }

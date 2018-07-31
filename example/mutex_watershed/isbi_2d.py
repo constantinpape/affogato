@@ -1,10 +1,13 @@
-import time
+import os
 import sys
-import h5py
-import numpy as np
-from affogato.segmentation import compute_mws_segmentation
+import time
+import argparse
 
-sys.path.append('/home/cpape/Work/my_projects/cremi_tools')
+import numpy as np
+import h5py
+
+from scipy.ndimage import convolve
+from affogato.segmentation import compute_mws_segmentation
 
 try:
     import mutex_watershed as mws
@@ -24,7 +27,13 @@ OFFSETS = [[-1, 0, 0], [0, -1, 0], [0, 0, -1],
            [0, -27, 0], [0, 0, -27]]
 
 
-def old_mws_segmentation(affs, stride=np.array([1, 1]),
+def seg2edges(segmentation):
+    gx = convolve(segmentation + 1, np.array([-1., 1.]).reshape(1, 2))
+    gy = convolve(segmentation + 1, np.array([-1., 1.]).reshape(2, 1))
+    return ((gx ** 2 + gy ** 2) > 0)
+
+
+def mws_segmentation_old(affs, stride=np.array([1, 1]),
                          randomize_bounds=False):
     t0 = time.time()
     vol_shape = affs.shape[1:]
@@ -40,11 +49,11 @@ def old_mws_segmentation(affs, stride=np.array([1, 1]),
     return segmentation, time.time() - t0
 
 
-def mws_segmentation(affs):
+def mws_segmentation(affs, algo, strides=None):
     t0 = time.time()
     seperating_channel = 2
-    seg = compute_mws_segmentation(seperating_channel,
-                                   OFFSETS, affs)
+    seg = compute_mws_segmentation(affs, OFFSETS, seperating_channel,
+                                    algorithm=algo, strides=strides)
     return seg, time.time() - t0
 
 
@@ -55,36 +64,63 @@ def get_2d_from_3d_offsets(offsets):
     return offsets, keep_channels
 
 
-if __name__ == '__main__':
+# TODO use matplotlib instead
+def view_res(data, labels):
+    sys.path.append('/home/cpape/Work/my_projects/cremi_tools')
     from cremi_tools.viewer.volumina import view
+    view(data, labels)
 
-    raw_path = '/home/cpape/Work/data/isbi2012/isbi2012_test_volume.h5'
-    aff_path = '/home/cpape/Work/data/isbi2012/isbi_test_offsetsV4_3d_meantda_damws2deval_final.h5'
 
-    slice_ = np.s_[0, :256, :256]
+if __name__ == '__main__':
+    # TODO add more options to parser to allow for different data
+    parser = argparse.ArgumentParser()
+    parser.add_argument('path', type=str, help='path to example data (download from https://hcicloud.iwr.uni-heidelberg.de/index.php/s/6LuE7nxBN3EFRtL)')
+    args = parser.parse_args()
+    path = args.path
+    if os.path.isdir(path):
+        path = os.path.join(path, 'isbi_test_volume.h5')
+    assert os.path.exists(path), path
+
+    slice_ = np.s_[0, :512, :512]
     aff_slice = (slice(None),) + slice_
     # load affinities and invert the repulsive channels
-    with h5py.File(aff_path) as f:
-        affs = f['data'][aff_slice]
-        affs[3:] *= -1
-        affs[3:] += 1
+    with h5py.File(path) as f:
+        raw = f['raw'][slice_]
+        affs = f['affinities'][aff_slice]
+        affs[:3] *= -1
+        affs[:3] += 1
     OFFSETS, keep_channels = get_2d_from_3d_offsets(OFFSETS)
     affs = affs[keep_channels]
-    print(affs.shape)
 
     print("Computing MWS segmentation ...")
-    seg0, t0 = mws_segmentation(affs)
+    seg0, t0 = mws_segmentation(affs, 'kruskal', strides=[2, 2])
+    edges0 = seg2edges(seg0)
+    print("... in %f s" % t0)
     segs = [seg0]
     labels = ['raw', 'seg_mws']
-    print("... in %f s" % t0)
-    if WITH_MWS:
-        print("Computing old MWS segmentation ...")
-        seg1, t1 = old_mws_segmentation(affs)
-        print("... in %f s" % t1)
-        segs.append(seg1)
-        labels.append('seg_mws_old')
 
-    with h5py.File(raw_path) as f:
-        raw = f['volumes/raw'][slice_]
+    print("Computing Prim MWS segmentation ...")
+    seg1, t1 = mws_segmentation(affs, 'prim', strides=[2, 2])
+    edges1 = seg2edges(seg1)
+    print("... in %f s" % t1)
+    segs.append(seg1)
+    labels.append('seg_prim')
 
-    view([raw] + segs, labels)
+    if np.allclose(edges0, edges1):
+        print("Prim and Kruskal segmentation agree")
+    else:
+        disagree = np.logical_not(np.isclose(edges0, edges1)).sum()
+        print("Prim and Kruskal segmentation dis-agree in %i / % i pixels" % (disagree, edges1.size))
+
+    # if WITH_MWS:
+    #     print("Computing old MWS segmentation ...")
+    #     affs[:2] *= -1
+    #     affs[:2] += 1
+    #     affs[2:] *= -1
+    #     affs[2:] += 1
+    #     seg2, t2 = mws_segmentation_old(affs)
+    #     print("... in %f s" % t2)
+    #     segs.append(seg2)
+    #     labels.append('seg_mws_old')
+
+    view_res([raw] + segs, labels)
