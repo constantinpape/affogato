@@ -8,13 +8,14 @@ namespace learning {
     double compute_mutex_malis_gradient(const xt::xexpression<WEIGHT_ARRAY> & flat_weights_exp,
                                         const xt::xexpression<INDEX_ARRAY> & sorted_flat_indices_exp,
                                         const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
-                                        const xt::xexpression<LABEL_ARRAY> & gt_labels_flat_exp,
+                                        xt::xexpression<LABEL_ARRAY> & gt_labels_flat_exp,
                                         const std::vector<std::vector<int>> & offsets,
                                         const size_t number_of_attractive_channels,
                                         const std::vector<int> & image_shape,
                                         xt::xexpression<GRADIENT_ARRAY> & gradient_exp,
                                         xt::xexpression<LABEL_ARRAY> & labels_pos_exp,
-                                        xt::xexpression<LABEL_ARRAY> & labels_neg_exp) {
+                                        xt::xexpression<LABEL_ARRAY> & labels_neg_exp,
+                                        const bool learn_in_ignore_label) {
 
         typedef typename GRADIENT_ARRAY::value_type GradType;
 
@@ -22,7 +23,7 @@ namespace learning {
         const auto & flat_weights = flat_weights_exp.derived_cast();
         const auto & sorted_flat_indices = sorted_flat_indices_exp.derived_cast();
         const auto & valid_edges = valid_edges_exp.derived_cast();
-        const auto & gt_labels = gt_labels_flat_exp.derived_cast();
+        auto & gt_labels = gt_labels_flat_exp.derived_cast();
         auto & grads = gradient_exp.derived_cast();
         auto & labels_pos = labels_pos_exp.derived_cast();
         auto & labels_neg = labels_neg_exp.derived_cast();
@@ -81,8 +82,10 @@ namespace learning {
 
         // iterate over all edges
         double loss = 0;
-        std::vector<uint64_t> neg_q;
+        std::vector<uint64_t> ignore_label_merge_q;
+        std::vector<uint64_t> ignore_label_mutex_q;
         std::vector<std::pair<uint64_t, uint64_t>> merge_q;
+        std::vector<uint64_t> neg_q;
 
         // positive pass
         for(const size_t edge_id : sorted_flat_indices) {
@@ -98,22 +101,31 @@ namespace learning {
             const uint64_t u = edge_id % number_of_nodes;
             const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
 
-            const auto lu = gt_labels[u];
-            const auto lv = gt_labels[v];
-
-            if(lu != lv) {
-                if(lu != 0 || lv != 0) {
-                    neg_q.push_back(edge_id);
-                }
-                continue;
-            }
-
             // find the current representatives
             uint64_t ru = ufd.find_set(u);
             uint64_t rv = ufd.find_set(v);
-
             // if the nodes are already connected, do nothing
             if(ru == rv) {
+                continue;
+            }
+
+            // const auto lu = learn_in_ignore_label ? gt_labels[ru] : gt_labels[u];
+            // const auto lv = learn_in_ignore_label ? gt_labels[rv] : gt_labels[v];
+            const auto lu = gt_labels[u];
+            const auto lv = gt_labels[v];
+
+            const bool touches_ignore_label = lu == 0 || lv == 0;
+
+            if(learn_in_ignore_label && touches_ignore_label){
+                if (is_mutex) ignore_label_mutex_q.push_back(edge_id);
+                else          ignore_label_merge_q.push_back(edge_id);
+                continue;
+            }
+
+            if(lu != lv) {
+                if (!touches_ignore_label) {
+                    neg_q.push_back(edge_id);
+                }
                 continue;
             }
 
@@ -156,6 +168,7 @@ namespace learning {
 
                 // otherwise merge and compute gradients
                 ufd.link(u, v);
+
                 // check  if we have to swap the roots
                 if(ufd.find_set(ru) == rv) {
                     std::swap(ru, rv);
@@ -202,6 +215,129 @@ namespace learning {
             labels_pos[label] = ufd.find_set(label);
         }
 
+        // merge all nodes inside ignore regions 
+        // this queue is empty if !learn_in_ignore_label
+        for(const auto & edge_id: ignore_label_merge_q) {
+            // get nodes connected by edge of edge_id
+            const uint64_t u = edge_id % number_of_nodes;
+            const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+
+            // find the current representatives
+            uint64_t ru = ufd.find_set(u);
+            uint64_t rv = ufd.find_set(v);
+
+            const auto lu = gt_labels[ru];
+            const auto lv = gt_labels[rv];
+
+            const bool on_boundary = lu != 0 && lv != 0 && lu != lv; 
+            if (!on_boundary){
+
+                // compute gradients for the merge
+                GradType current_gradient = 0;
+                const auto w = flat_weights[edge_id];
+                // const GradType grad = pos ? 1. - w : -w;
+                const GradType grad = w - 1.;
+
+                // compute the number of node pairs merged by this edge
+                for(auto it_u = overlaps[ru].begin(); it_u != overlaps[ru].end(); ++it_u) {
+                    for(auto it_v = overlaps[rv].begin(); it_v != overlaps[rv].end(); ++it_v) {
+                        const size_t n_pair = it_u->second * it_v->second;
+                        if(it_u->first == it_v->first) {
+                            loss += grad * grad * n_pair;
+                            current_gradient += grad * n_pair;
+                        }
+                    }
+                }
+                grads[edge_id] += current_gradient;
+
+                // merge
+                ufd.link(u, v);
+               // check  if we have to swap the roots
+                if(ufd.find_set(ru) == rv) {
+                    std::swap(ru, rv);
+                }
+
+                if (gt_labels[ru] == 0){
+                    gt_labels[ru] = lu == 0 ? lv : lu;
+                }
+
+                auto & overlaps_u = overlaps[ru];
+                auto & overlaps_v = overlaps[rv];
+                auto it_v = overlaps_v.begin();
+                while(it_v != overlaps_v.end()) {
+                    auto it_u = overlaps_u.find(it_v->first);
+                    if(it_u == overlaps_u.end()) {
+                        overlaps_u.insert(std::make_pair(it_v->first, it_v->second));
+                    } else {
+                        it_u->second += it_v->second;
+                    }
+                    overlaps_v.erase(it_v);
+                    ++it_v;
+                }
+            }
+            else{
+                gt_labels[u] = gt_labels[ru];
+                gt_labels[v] = gt_labels[rv];
+                for(int i = 0; i < neg_q.size(); ++i){
+                    if (flat_weights[neg_q[i]] < flat_weights[edge_id]){
+                        neg_q.insert(neg_q.begin()+i, edge_id);
+                        break;
+                    }
+                }
+            }
+        }
+
+
+        // merge all nodes inside ignore regions 
+        // this queue is empty if !learn_in_ignore_label
+        for(const auto & edge_id: ignore_label_mutex_q) {
+            // get nodes connected by edge of edge_id
+            const uint64_t u = edge_id % number_of_nodes;
+            const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+
+            // find the current representatives
+            uint64_t ru = ufd.find_set(u);
+            uint64_t rv = ufd.find_set(v);
+
+            const auto lu = gt_labels[ru];
+            const auto lv = gt_labels[rv];
+
+            const bool on_boundary = lu != lv;
+            if (!on_boundary){
+                // compute gradient for the mutex edge
+                // compute gradients for the merge
+                GradType current_gradient = 0;
+                const auto w = flat_weights[edge_id];
+                const GradType grad = +w;
+
+                // TODO double check the gradients
+                // compute the number of node pairs that would be merged by this edge
+                for(auto it_u = overlaps[ru].begin(); it_u != overlaps[ru].end(); ++it_u) {
+                    for(auto it_v = overlaps[rv].begin(); it_v != overlaps[rv].end(); ++it_v) {
+                        const size_t n_pair = it_u->second * it_v->second;
+                        if(it_u->first == it_v->first) {
+                            loss += grad * grad * n_pair;
+                            current_gradient += grad * n_pair;
+                        }
+                    }
+                }
+                grads[edge_id] += current_gradient;
+            }
+            else{
+                // this is on the boundary
+                // write root information to label image and
+                // push edge to negative queue
+                gt_labels[u] = gt_labels[ru];
+                gt_labels[v] = gt_labels[rv];
+                for(int i = 0; i < neg_q.size(); ++i){
+                    if (flat_weights[neg_q[i]] < flat_weights[edge_id]){
+                        neg_q.insert(neg_q.begin()+i, edge_id);
+                        break;
+                    }
+                }
+            }
+        }
+
         // apply merge q
         for(const auto & merge_pair: merge_q) {
             ufd.link(merge_pair.first, merge_pair.second);
@@ -224,12 +360,12 @@ namespace learning {
             const uint64_t u = edge_id % number_of_nodes;
             const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
 
-            const auto lu = gt_labels[u];
-            const auto lv = gt_labels[v];
-
             // find the current representatives
             uint64_t ru = ufd.find_set(u);
             uint64_t rv = ufd.find_set(v);
+
+            const auto lu = gt_labels[u];
+            const auto lv = gt_labels[v];
 
             // if the nodes are already connected, do nothing
             if(ru == rv) {
@@ -359,13 +495,14 @@ namespace learning {
     double constrained_mutex_malis_debug(const xt::xexpression<WEIGHT_ARRAY> & flat_weights_exp,
                                          const xt::xexpression<INDEX_ARRAY> & sorted_flat_indices_exp,
                                          const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
-                                         const xt::xexpression<LABEL_ARRAY> & gt_labels_flat_exp,
+                                         xt::xexpression<LABEL_ARRAY> & gt_labels_flat_exp,
                                          const std::vector<std::vector<int>> & offsets,
                                          const size_t number_of_attractive_channels,
                                          const std::vector<int> & image_shape,
                                          xt::xexpression<GRADIENT_ARRAY> & gradient_exp,
                                          xt::xexpression<LABEL_ARRAY> & labels_pos_exp,
-                                         xt::xexpression<LABEL_ARRAY> & labels_neg_exp) {
+                                         xt::xexpression<LABEL_ARRAY> & labels_neg_exp,
+                                         const bool learn_in_ignore_label) {
 
         const auto & flat_weights = flat_weights_exp.derived_cast();
         const auto & sorted_flat_indices = sorted_flat_indices_exp.derived_cast();
@@ -377,7 +514,8 @@ namespace learning {
                                                              valid_edges, gt_labels_flat_exp,
                                                              offsets, number_of_attractive_channels,
                                                              image_shape, gradients,
-                                                             labels_pos_exp, labels_neg_exp);
+                                                             labels_pos_exp, labels_neg_exp,
+                                                             learn_in_ignore_label);
 
         return loss;
     }
