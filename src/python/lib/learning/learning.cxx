@@ -84,30 +84,26 @@ PYBIND11_MODULE(_learning, m)
                                  const xt::pytensor<uint64_t, 1> & gt_labels,
                                  const std::vector<std::vector<int>> & offsets,
                                  const size_t number_of_attractive_channels,
-                                 const std::vector<int> & image_shape,
-                                 const int pass) {
+                                 const std::vector<int> & image_shape) {
         double loss = 0;
 
         xt::pytensor<float, 1> gradients = xt::zeros<float>({flat_weights.size()});
+        xt::pytensor<uint64_t, 1> labels_pos = xt::zeros<uint64_t>({gt_labels.size()});
+        xt::pytensor<uint64_t, 1> labels_neg = xt::zeros<uint64_t>({gt_labels.size()});
         {
             // TODO properly switch between the passes
             py::gil_scoped_release allowThreads;
-            // loss = learning::compute_mutex_malis_gradient(flat_weights, sorted_flat_indices,
-            //                                               valid_edges, gt_labels,
-            //                                               offsets, number_of_attractive_channels,
-            //                                               image_shape, 0, gradients);
-            loss = learning::constrained_mutex_malis(flat_weights, sorted_flat_indices,
-                                                     valid_edges, gt_labels,
-                                                     offsets, number_of_attractive_channels,
-                                                     image_shape, gradients);
+            loss = learning::constrained_mutex_malis_debug(flat_weights, sorted_flat_indices,
+                                                           valid_edges, gt_labels,
+                                                           offsets, number_of_attractive_channels,
+                                                           image_shape, gradients, labels_pos, labels_neg);
         }
-        return std::make_pair(loss, gradients);
+        return std::make_tuple(loss, gradients, labels_pos, labels_neg);
     }, py::arg("flat_weights"),
        py::arg("sorted_flat_indices"),
        py::arg("valid_edges"),
        py::arg("gt_labels"),
        py::arg("offsets"),
        py::arg("number_of_attractive_channels"),
-       py::arg("image_shape"),
-       py::arg("pass")=0);
+       py::arg("image_shape"));
 }
