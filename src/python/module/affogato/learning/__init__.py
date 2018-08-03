@@ -10,6 +10,8 @@ def mutex_malis(weights, gt_labels, offsets,
 
     ndim = len(offsets[0])
     assert all(len(off) == ndim for off in offsets)
+    assert weights.max() <= 1.
+    assert weights.min() >= 0.
     image_shape = weights.shape[1:]
 
     valid_edges = get_valid_edges(weights.shape, offsets, number_of_attractive_channels,

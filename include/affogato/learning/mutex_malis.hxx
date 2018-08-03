@@ -79,12 +79,6 @@ namespace learning {
             ufd.make_set(node_index);
         }
 
-        // compute normalisation
-        size_t normalisation = number_of_positive_pairs;
-        if(normalisation == 0) {
-            throw std::runtime_error("Normalization is zero!");
-        }
-
         // iterate over all edges
         double loss = 0;
         std::vector<uint64_t> neg_q;
@@ -143,20 +137,20 @@ namespace learning {
                 const auto w = flat_weights[edge_id];
                 // TODO sign of gradient ?!
                 // const GradType grad = pos ? -w : 1 - w;
-                const GradType grad = -w;
+                const GradType grad = +w;
 
                 // TODO double check the gradients
                 // compute the number of node pairs that would be merged by this edge
                 for(auto it_u = overlaps[ru].begin(); it_u != overlaps[ru].end(); ++it_u) {
                     for(auto it_v = overlaps[rv].begin(); it_v != overlaps[rv].end(); ++it_v) {
                         const size_t n_pair = it_u->second * it_v->second;
-                        if(it_u->first != it_v->first) {
+                        if(it_u->first == it_v->first) {
                             loss += grad * grad * n_pair;
                             current_gradient += grad * n_pair;
                         }
                     }
                 }
-                grads[edge_id] += current_gradient / normalisation;
+                grads[edge_id] += current_gradient;
 
             } else {
 
@@ -173,7 +167,7 @@ namespace learning {
                 GradType current_gradient = 0;
                 const auto w = flat_weights[edge_id];
                 // const GradType grad = pos ? 1. - w : -w;
-                const GradType grad = 1. - w;
+                const GradType grad = w - 1.;
 
                 // compute the number of node pairs merged by this edge
                 for(auto it_u = overlaps[ru].begin(); it_u != overlaps[ru].end(); ++it_u) {
@@ -185,7 +179,7 @@ namespace learning {
                         }
                     }
                 }
-                grads[edge_id] += current_gradient / normalisation;
+                grads[edge_id] += current_gradient;
 
                 auto & overlaps_u = overlaps[ru];
                 auto & overlaps_v = overlaps[rv];
@@ -217,7 +211,6 @@ namespace learning {
         // mutexes.clear();
 
         // negative pass
-        normalisation = (number_of_labeled_nodes - 1) / 2 - number_of_positive_pairs;
         for(const size_t edge_id : neg_q) {
 
             if(!valid_edges(edge_id)){
@@ -262,20 +255,20 @@ namespace learning {
                 GradType current_gradient = 0;
                 const auto w = flat_weights[edge_id];
                 // TODO sign of gradient ?!
-                const GradType grad = 1 - w;
+                const GradType grad = w - 1.;
 
                 // TODO double check the gradients
                 // compute the number of node pairs that would be merged by this edge
                 for(auto it_u = overlaps[ru].begin(); it_u != overlaps[ru].end(); ++it_u) {
                     for(auto it_v = overlaps[rv].begin(); it_v != overlaps[rv].end(); ++it_v) {
                         const size_t n_pair = it_u->second * it_v->second;
-                        if(it_u->first == it_v->first) {
+                        if(it_u->first != it_v->first) {
                             loss += grad * grad * n_pair;
                             current_gradient += grad * n_pair;
                         }
                     }
                 }
-                grads[edge_id] += current_gradient / normalisation;
+                grads[edge_id] += current_gradient;
 
             } else {
 
@@ -291,7 +284,7 @@ namespace learning {
                 // compute gradients for the merge
                 GradType current_gradient = 0;
                 const auto w = flat_weights[edge_id];
-                const GradType grad = -w;
+                const GradType grad = +w;
 
                 // compute the number of node pairs merged by this edge
                 for(auto it_u = overlaps[ru].begin(); it_u != overlaps[ru].end(); ++it_u) {
@@ -303,7 +296,7 @@ namespace learning {
                         }
                     }
                 }
-                grads[edge_id] += current_gradient / normalisation;
+                grads[edge_id] += current_gradient;
 
                 auto & overlaps_u = overlaps[ru];
                 auto & overlaps_v = overlaps[rv];
@@ -320,8 +313,6 @@ namespace learning {
                 }
             }
         }
-        std::cout << "Negative pass done" << std::endl;
-
         // get neg node labeling
         for(size_t label = 0; label < number_of_nodes; ++label) {
             labels_neg[label] = ufd.find_set(label);
@@ -388,10 +379,7 @@ namespace learning {
                                                              image_shape, gradients,
                                                              labels_pos_exp, labels_neg_exp);
 
-        // normalize and invert the gradients
-        gradients /= -2.;
-        // return - (loss_pos + loss_neg) / 2.;
-        return - loss / 2.;
+        return loss;
     }
 
 }
