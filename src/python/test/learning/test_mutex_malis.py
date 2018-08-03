@@ -14,7 +14,9 @@ class TesMutextMalis(unittest.TestCase):
         offsets = [[-1, 0], [0, -1], [-3, 0], [0, -3]]
         affs, _ = compute_affinities(labels, offsets)
         affs += 0.1 * np.random.randn(*affs.shape)
-        loss, grads = mutex_malis(affs, labels, offsets, 2)
+        affs -= affs.min()
+        affs /= affs.max()
+        loss, grads, _, _ = mutex_malis(affs, labels, offsets, 2)
         self.assertEqual(grads.shape, affs.shape)
         # FIXME this fails
         self.assertNotEqual(loss, 0)
@@ -64,7 +66,9 @@ class TesMutextMalis(unittest.TestCase):
                    [-3, 0, 0], [0, -3, 0], [0, 0, -3]]
         affs, _ = compute_affinities(labels, offsets)
         affs += 0.1 * np.random.randn(*affs.shape)
-        loss, grads = mutex_malis(affs, labels, offsets, 3)
+        affs -= affs.min()
+        affs /= affs.max()
+        loss, grads, _, _ = mutex_malis(affs, labels, offsets, 3)
         self.assertEqual(grads.shape, affs.shape)
         # FIXME this fails
         self.assertNotEqual(loss, 0)
