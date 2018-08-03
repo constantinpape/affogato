@@ -72,5 +72,4 @@ class TesMutextMalis(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # unittest.main()
-    TesMutextMalis().test_malis_2d_gradient_descent()
+    unittest.main()
