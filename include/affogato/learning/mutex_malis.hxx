@@ -22,17 +22,12 @@ namespace learning {
         if (invert){
             grad = grad - 1.;
         }
+
+        // early exit for more efficiency
         if (grad == 0.){
-            // std::cout << "whaaat" << std::endl;
             return;
         }
 
-        // // debug 
-        // if (invert) out_grad -= 0.1;
-        // else        out_grad += 0.1;
-        // return;
-        // debug
-            
         for(auto it_u = overlaps[ru].begin(); it_u != overlaps[ru].end(); ++it_u) {
             for(auto it_v = overlaps[rv].begin(); it_v != overlaps[rv].end(); ++it_v) {
                 // if separate is true the error is proportional to 
@@ -383,8 +378,6 @@ namespace learning {
                 // insert the mutex edge into both mutex edge storages
                 segmentation::insert_mutex(ru, rv, edge_id, mutexes);
                 compute_gradient(ru, rv, overlaps, true, false, loss, flat_weights[edge_id], grads[edge_id]);
-                // grads[edge_id] = -0.1;
-                // std::cout << "negmut " << grads[edge_id] << flat_weights[edge_id] << std::endl;
             } else {
 
                 // otherwise merge and compute gradients
@@ -396,7 +389,6 @@ namespace learning {
                 // merge mutexes from rv -> ru
                 segmentation::merge_mutexes(rv, ru, mutexes);
                 compute_gradient(ru, rv, overlaps, false, false, loss, flat_weights[edge_id], grads[edge_id]);
-                // std::cout << "negmerge" << grads[edge_id] << flat_weights[edge_id] << std::endl;
                 add_overlaps(ru, rv, overlaps);
             }
         }
