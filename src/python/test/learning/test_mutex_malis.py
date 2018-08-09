@@ -6,7 +6,7 @@ import numpy as np
 # TODO check ignore data
 class TesMutextMalis(unittest.TestCase):
 
-    def test_malis_2d(self):
+    def test_mutex_malis_2d(self):
         from affogato.affinities import compute_affinities
         from affogato.learning import mutex_malis
         shape = (100, 100)
@@ -18,7 +18,6 @@ class TesMutextMalis(unittest.TestCase):
         affs /= affs.max()
         loss, grads, _, _ = mutex_malis(affs, labels, offsets, 2)
         self.assertEqual(grads.shape, affs.shape)
-        # FIXME this fails
         self.assertNotEqual(loss, 0)
         self.assertFalse(np.allclose(grads, 0))
 
@@ -28,7 +27,7 @@ class TesMutextMalis(unittest.TestCase):
         gy = convolve(segmentation + 1, np.array([-1., 1.]).reshape(2, 1))
         return ((gx ** 2 + gy ** 2) > 0)
 
-    def test_malis_2d_gradient_descent(self):
+    def test_mutex_malis_2d_gradient_descent(self):
         from affogato.segmentation import compute_mws_segmentation
         from affogato.learning import mutex_malis
         shape = (100, 100)
@@ -96,10 +95,10 @@ class TesMutextMalis(unittest.TestCase):
         edges2 = self.seg2edges(labels)
         self.assertTrue(np.allclose(edges1, edges2))
 
-    def test_malis_3d(self):
+    def test_mutex_malis_3d(self):
         from affogato.affinities import compute_affinities
         from affogato.learning import mutex_malis
-        shape = (100, 100, 100)
+        shape = (32, 64, 64)
         labels = np.random.randint(0, 1000, size=shape)
         offsets = [[-1, 0, 0], [0, -1, 0], [0, 0, -1],
                    [-3, 0, 0], [0, -3, 0], [0, 0, -3]]
