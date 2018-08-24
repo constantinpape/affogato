@@ -81,10 +81,11 @@ PYBIND11_MODULE(_learning, m)
     m.def("mutex_malis_impl", [](const xt::pytensor<float, 1> & flat_weights,
                                  const xt::pytensor<uint64_t, 1> & sorted_flat_indices,
                                  const xt::pytensor<bool, 1> & valid_edges,
-                                 const xt::pytensor<uint64_t, 1> & gt_labels,
+                                 xt::pytensor<uint64_t, 1> & gt_labels,
                                  const std::vector<std::vector<int>> & offsets,
                                  const size_t number_of_attractive_channels,
-                                 const std::vector<int> & image_shape) {
+                                 const std::vector<int> & image_shape,
+                                 const bool learn_in_ignore_label) {
         double loss = 0;
 
         xt::pytensor<float, 1> gradients = xt::zeros<float>({flat_weights.size()});
@@ -96,7 +97,8 @@ PYBIND11_MODULE(_learning, m)
             loss = learning::constrained_mutex_malis_debug(flat_weights, sorted_flat_indices,
                                                            valid_edges, gt_labels,
                                                            offsets, number_of_attractive_channels,
-                                                           image_shape, gradients, labels_pos, labels_neg);
+                                                           image_shape, gradients, labels_pos, labels_neg,
+                                                           learn_in_ignore_label);
         }
         return std::make_tuple(loss, gradients, labels_pos, labels_neg);
     }, py::arg("flat_weights"),
@@ -105,5 +107,6 @@ PYBIND11_MODULE(_learning, m)
        py::arg("gt_labels"),
        py::arg("offsets"),
        py::arg("number_of_attractive_channels"),
-       py::arg("image_shape"));
+       py::arg("image_shape"),
+       py::arg("learn_in_ignore_label"));
 }
