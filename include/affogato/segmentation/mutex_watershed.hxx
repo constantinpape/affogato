@@ -125,8 +125,8 @@ namespace segmentation {
 
             // find the edge-id or mutex id and the connected nodes
             const size_t id = is_mutex_edge ? edge_id - num_edges : edge_id;
-            const uint64_t u = mutex_uvs(id, 0);
-            const uint64_t v = mutex_uvs(id, 1);
+            const uint64_t u = is_mutex_edge ? mutex_uvs(id, 0) : uvs(id, 0);
+            const uint64_t v = is_mutex_edge ? mutex_uvs(id, 1) : uvs(id, 1);
 
             // find the current representatives
             uint64_t ru = ufd.find_set(u);
