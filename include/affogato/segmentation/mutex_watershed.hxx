@@ -110,7 +110,7 @@ namespace segmentation {
         std::sort(indices.begin(), indices.end(), [&](const size_t a, const size_t b){
             const double val_a = (a < num_edges) ? weights(a) : mutex_weights(a - num_edges);
             const double val_b = (b < num_edges) ? weights(b) : mutex_weights(b - num_edges);
-            return val_a < val_b;
+            return val_a > val_b;
         });
 
         // data-structure storing mutex edges
