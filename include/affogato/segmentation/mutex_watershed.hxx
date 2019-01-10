@@ -169,7 +169,6 @@ namespace segmentation {
         }
     }
 
-
     // compute mutex segmentation via kruskal
     template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
     void compute_mws_segmentation(const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
@@ -270,6 +269,187 @@ namespace segmentation {
                 // merge mutexes from rv -> ru
                 merge_mutexes(rv, ru, mutexes);
             }
+        }
+
+        // get node labeling into output
+        for(size_t label = 0; label < number_of_nodes; ++label) {
+            node_labeling[label] = ufd.find_set(label);
+        }
+    }
+
+    // compute mutex segmentation via kruskal
+    template<class WEIGHT_ARRAY, class NODE_ARRAY, class INDICATOR_ARRAY>
+    void compute_divisive_mws_segmentation(const xt::xexpression<WEIGHT_ARRAY> & sorted_flat_indices_exp,
+                                  const xt::xexpression<INDICATOR_ARRAY> & valid_edges_exp,
+                                  const std::vector<std::vector<int>> & offsets,
+                                  const size_t number_of_attractive_channels,
+                                  const std::vector<int> & image_shape,
+                                  xt::xexpression<NODE_ARRAY> & node_labeling_exp) {
+
+        // casts
+        const auto & sorted_flat_indices = sorted_flat_indices_exp.derived_cast();
+        const auto & valid_edges = valid_edges_exp.derived_cast();
+        auto & node_labeling = node_labeling_exp.derived_cast();
+
+        // determine number of nodes and attractive edges (considering all edges, not only valid ones)
+        const size_t number_of_nodes = node_labeling.size();
+        const size_t number_of_attractive_edges = number_of_nodes * number_of_attractive_channels;
+        const size_t number_of_offsets = offsets.size();
+        const size_t ndims = offsets[0].size();
+
+        // Define helper vector to find pair (u,v) from edge_id:
+        std::vector<int64_t> array_stride(ndims);
+        int64_t current_stride = 1;
+        for (int i = ndims-1; i >= 0; --i){
+            array_stride[i] = current_stride;
+            current_stride *= image_shape[i];
+//            std::cout << i << " " << array_stride[i] << "\n";
+        }
+        std::vector<int64_t> offset_strides;
+        for (const auto & offset: offsets){
+            int64_t stride = 0;
+            for (int i = 0; i < offset.size(); ++i){
+                stride += offset[i] * array_stride[i];
+            }
+            offset_strides.push_back(stride);
+//            std::cout << stride << "\n";
+        }
+
+        // Phase 1: build minimum spanning forest
+
+        // arrays storing the Minimum Spanning Forest:
+        const size_t number_of_edges = number_of_nodes * number_of_offsets;
+        std::vector<uint64_t> MSF(number_of_edges);
+
+        {
+            // make ufd
+            std::vector <uint64_t> ranks(number_of_nodes);
+            std::vector <uint64_t> parents(number_of_nodes);
+            boost::disjoint_sets < uint64_t * , uint64_t * > ufd(&ranks[0], &parents[0]);
+            for (uint64_t label = 0; label < number_of_nodes; ++label) {
+                ufd.make_set(label);
+            }
+
+            // data-structure storing mutex edges
+            typedef std::vector <std::vector<uint64_t>> MutexStorage;
+            MutexStorage mutexes(number_of_nodes);
+
+            // iterate over all edges
+            int number_of_clusters = number_of_nodes;
+            int nb_conn = 0;
+            int nb_add_mtx = 0;
+            int nb_mrg_not = 0;
+            int nb_mrg = 0;
+            int counter = 0;
+
+            for (const size_t edge_id : sorted_flat_indices) {
+                // Initialize value
+                MSF[edge_id] = 0;
+                counter++;
+                if (counter % 500000 == 0) {
+                    std::cout << "nb_conn " << nb_conn << "\n";
+                    std::cout << "nb_add_mtx " << nb_add_mtx << "\n";
+                    std::cout << "nb_mrg_not " << nb_mrg_not << "\n";
+                    std::cout << "nb_mrg " << nb_mrg << "\n";
+                    std::cout << "number_of_clusters " << number_of_clusters << "\n";
+                    std::cout << "-----\n";
+                }
+                if (!valid_edges(edge_id)) {
+                    continue;
+                }
+
+                // check whether this edge is mutex via the edge offset
+                const bool is_mutex_edge = edge_id >= number_of_attractive_edges;
+
+                // get nodes connected by edge of edge_id
+
+                // const auto affCoord_ = xt::unravel_from_strides(edge_id, strides, layout);
+                const uint64_t u = edge_id % number_of_nodes;
+                const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+                //            std::cout << u << " " << v << " " << is_mutex_edge << " ";
+
+                // find the current representatives
+                uint64_t ru = ufd.find_set(u);
+                uint64_t rv = ufd.find_set(v);
+
+                // if the nodes are already connected, do nothing
+                if (ru == rv) {
+                    nb_conn++;
+                    //                std::cout << " --> Connected \n";
+                    continue;
+                }
+
+                const auto is_constrained = check_mutex(ru, rv, mutexes);
+
+                // insert the mutex edge into both mutex edge storages only if it was not already added:
+                if (is_mutex_edge && not is_constrained) {
+//                                    std::cout << " --> Add mutex \n";
+                    insert_mutex(ru, rv, edge_id, mutexes);
+                    nb_add_mtx++;
+                    continue;
+                }
+                // If not a mutex edge, then merge:
+                if (not is_mutex_edge) {
+                    // If the edge is not constrained, we add it to the MSF:
+                    if (not is_constrained) {
+                        nb_mrg_not++;
+                        MSF[edge_id] = 1;
+                    }
+                    nb_mrg++;
+                    // And now we merge anyway:
+                    number_of_clusters--;
+//                    if (number_of_clusters % 200 == 0)
+//                        std::cout << "." << number_of_clusters;
+                    //                std::cout << " --> Merge \n";
+                    ufd.link(u, v);
+                    // check  if we have to swap the roots
+                    if (ufd.find_set(ru) == rv) {
+                        std::swap(ru, rv);
+                    }
+                    // merge mutexes from rv -> ru
+                    merge_mutexes(rv, ru, mutexes);
+                }
+
+                // Stop when we have merged everything in one cluster:
+                if (number_of_clusters <= 1) {
+                    break;
+                }
+            }
+            std::cout << "nb_conn " << nb_conn << "\n";
+            std::cout << "nb_add_mtx " << nb_add_mtx << "\n";
+            std::cout << "nb_mrg_not " << nb_mrg_not << "\n";
+            std::cout << "nb_mrg " << nb_mrg << "\n";
+            std::cout << "number_of_clusters " << number_of_clusters << "\n";
+            std::cout << "--DONE---\n";
+//            // get node labeling into output
+//            for(size_t label = 0; label < number_of_nodes; ++label) {
+//                node_labeling[label] = ufd.find_set(label);
+//            }
+
+        }
+
+        // PHASE 2: get node labeling by running connected components on the built forest:
+        // make new ufd
+        std::vector <uint64_t> ranks(number_of_nodes);
+        std::vector <uint64_t> parents(number_of_nodes);
+        boost::disjoint_sets < uint64_t * , uint64_t * > ufd(&ranks[0], &parents[0]);
+        for (uint64_t label = 0; label < number_of_nodes; ++label) {
+            ufd.make_set(label);
+        }
+
+        // loop over attractive edges
+        for (size_t edge_id = 0; edge_id < number_of_attractive_edges; ++edge_id) {
+            if (MSF[edge_id] == 1) {
+                const uint64_t u = edge_id % number_of_nodes;
+                const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+                // find the current representatives
+                uint64_t ru = ufd.find_set(u);
+                uint64_t rv = ufd.find_set(v);
+                if (ru != rv) {
+                    ufd.link(u, v);
+                }
+            }
+
         }
 
         // get node labeling into output
