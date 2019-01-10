@@ -3,6 +3,7 @@
 #include "xtensor/xtensor.hpp"
 #include <queue>
 #include <functional>
+#include <iostream>
 
 namespace affogato {
 namespace segmentation {
@@ -183,19 +184,20 @@ namespace segmentation {
         const auto & valid_edges = valid_edges_exp.derived_cast();
         auto & node_labeling = node_labeling_exp.derived_cast();
 
-        // determine number of nodes and attractive edges
+        // determine number of nodes and attractive edges (considering all edges, not only valid ones)
         const size_t number_of_nodes = node_labeling.size();
         const size_t number_of_attractive_edges = number_of_nodes * number_of_attractive_channels;
         const size_t number_of_offsets = offsets.size();
         const size_t ndims = offsets[0].size();
 
+        // Define helper vector to find pair (u,v) from edge_id:
         std::vector<int64_t> array_stride(ndims);
         int64_t current_stride = 1;
         for (int i = ndims-1; i >= 0; --i){
             array_stride[i] = current_stride;
             current_stride *= image_shape[i];
+//            std::cout << i << " " << array_stride[i] << "\n";
         }
-
         std::vector<int64_t> offset_strides;
         for (const auto & offset: offsets){
             int64_t stride = 0;
@@ -203,6 +205,7 @@ namespace segmentation {
                 stride += offset[i] * array_stride[i];
             }
             offset_strides.push_back(stride);
+//            std::cout << stride << "\n";
         }
 
         // make ufd
@@ -232,6 +235,7 @@ namespace segmentation {
             // const auto affCoord_ = xt::unravel_from_strides(edge_id, strides, layout);
             const uint64_t u = edge_id % number_of_nodes;
             const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
+//            std::cout << u << " " << v << " " << is_mutex_edge << " ";
 
             // find the current representatives
             uint64_t ru = ufd.find_set(u);
@@ -239,6 +243,7 @@ namespace segmentation {
 
             // if the nodes are already connected, do nothing
             if(ru == rv) {
+//                std::cout << " --> Connected \n";
                 continue;
             }
 
@@ -246,16 +251,17 @@ namespace segmentation {
             // (if this is a regular edge, we do not link, if it is a mutex edge
             //  we do not need to insert the redundant mutex constraint)
             if(check_mutex(ru, rv, mutexes)) {
+//                std::cout << " --> Already mutex \n";
                 continue;
             }
 
             if(is_mutex_edge) {
-
+//                std::cout << " --> Add mutex \n";
                 // insert the mutex edge into both mutex edge storages
                 insert_mutex(ru, rv, edge_id, mutexes);
 
             } else {
-
+//                std::cout << " --> Merge \n";
                 ufd.link(u, v);
                 // check  if we have to swap the roots
                 if(ufd.find_set(ru) == rv) {
