@@ -5,7 +5,7 @@ from ._segmentation import *
 # TODO duble check with steffen
 def get_valid_edges(shape, offsets, number_of_attractive_channels,
                     strides, randomize_strides):
-    # compute valid edges
+    # compute valid edges, i.e. the ones not going out of the image boundaries
     ndim = len(offsets[0])
     image_shape = shape[1:]
     valid_edges = np.ones(shape, dtype=bool)
@@ -35,8 +35,12 @@ def get_valid_edges(shape, offsets, number_of_attractive_channels,
 
 
 def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
-                             strides=None, randomize_strides=False,
+                             strides=None, randomize_strides=False, invert_repulsive_weights=True,
+                             bias_cut=0.,
                              algorithm='kruskal'):
+    """
+    :param weights: Expected real affinities between 0. and 1. (0 means 'merge', 1 means 'split')
+    """
     assert algorithm in ('kruskal', 'prim'), "Unsupported algorithm, %s" % algorithm
     ndim = len(offsets[0])
     assert all(len(off) == ndim for off in offsets)
@@ -44,6 +48,10 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
 
     valid_edges = get_valid_edges(weights.shape, offsets, number_of_attractive_channels,
                                   strides, randomize_strides)
+    if invert_repulsive_weights:
+        weights[number_of_attractive_channels:] *= -1
+        weights[number_of_attractive_channels:] += 1
+    weights[:number_of_attractive_channels] += bias_cut
 
     if algorithm == 'kruskal':
         # sort and flatten weights
