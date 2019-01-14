@@ -20,8 +20,12 @@ namespace segmentation {
     template<class MUTEX_STORAGE>
     inline bool check_mutex(const uint64_t ru, const uint64_t rv,
                             const MUTEX_STORAGE & mutexes) {
-        const auto & setU  = mutexes[ru];
-        if(setU.find(rv)!=setU.end()){// || setV.find(u)!=setV.end()){
+        const auto & size_set_u  = mutexes[ru].size();
+        const auto & size_set_v  = mutexes[rv].size();
+        const auto & smaller_set = (size_set_u < size_set_v) ? mutexes[ru] : mutexes[rv];
+        const auto & node_to_check = (size_set_u < size_set_v) ? rv : ru;
+        // Look for the other node in the smaller constraints set:
+        if(smaller_set.find(node_to_check) != smaller_set.end()){
             return true;
         } else{
             return false;
@@ -331,7 +335,7 @@ namespace segmentation {
                 // Initialize value
                 MSF[edge_id] = 0;
                 counter++;
-                if (counter % 500000 == 0) {
+                if (counter % 5000000 == 0) {
                     std::cout << "nb_conn " << nb_conn << "\n";
                     std::cout << "nb_add_mtx " << nb_add_mtx << "\n";
                     std::cout << "nb_mrg_not " << nb_mrg_not << "\n";
@@ -379,8 +383,9 @@ namespace segmentation {
                     if (not is_constrained) {
                         nb_mrg_not++;
                         MSF[edge_id] = 1;
+                    } else {
+                        nb_mrg++;
                     }
-                    nb_mrg++;
                     // And now we merge anyway:
                     number_of_clusters--;
 //                    if (number_of_clusters % 200 == 0)
@@ -397,6 +402,8 @@ namespace segmentation {
 
                 // Stop when we have merged everything in one cluster:
                 if (number_of_clusters <= 1) {
+                    std::cout << "Iterations " << counter << "\n";
+                    std::cout << "Total edges (including not valid) " << number_of_edges << "\n";
                     break;
                 }
             }
@@ -424,7 +431,7 @@ namespace segmentation {
 
         // loop over attractive edges
         for (size_t edge_id = 0; edge_id < number_of_attractive_edges; ++edge_id) {
-            if (MSF[edge_id] == 1) {
+            if (MSF[edge_id] == 1 && valid_edges(edge_id)) {
                 const uint64_t u = edge_id % number_of_nodes;
                 const uint64_t v = u + offset_strides[edge_id / number_of_nodes];
                 // find the current representatives

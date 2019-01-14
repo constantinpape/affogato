@@ -80,6 +80,32 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("image_shape"));
 
 
+    m.def("compute_divisive_mws_segmentation_impl",[](const xt::pytensor<int64_t, 1> & sorted_flat_indices,
+                                                        const xt::pytensor<bool, 1> & valid_edges,
+                                                        const std::vector<std::vector<int>> & offsets,
+                                                        const size_t number_of_attractive_channels,
+                                                        const std::vector<int> & image_shape){
+        int64_t number_of_nodes = 1;
+        for (auto & s: image_shape){
+            number_of_nodes *= s;
+        }
+        xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({number_of_nodes});
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::compute_divisive_mws_segmentation(sorted_flat_indices,
+                    valid_edges,
+                    offsets,
+                    number_of_attractive_channels,
+                    image_shape,
+                    node_labeling);
+        }
+        return node_labeling;
+    }, py::arg("sorted_flat_indices"),
+        py::arg("valid_edges"),
+        py::arg("offsets"),
+        py::arg("number_of_attractive_channels"),
+        py::arg("image_shape"));
+
     m.def("compute_mws_prim_segmentation_impl",[](const xt::pytensor<float, 1> & edge_weights,
                                                   const xt::pytensor<bool, 1> & valid_edges,
                                                   const std::vector<std::vector<int>> & offsets,
