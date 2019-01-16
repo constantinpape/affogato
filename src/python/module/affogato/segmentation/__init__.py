@@ -34,6 +34,51 @@ def get_valid_edges(shape, offsets, number_of_attractive_channels,
             valid_edges = np.logical_and(valid_edges, stride_edges)
     return valid_edges
 
+def get_sorted_flat_indices_and_valid_edges(weights, offsets, number_of_attractive_channels,
+                                            strides=None, randomize_strides=False, invert_repulsive_weights=True,
+                                            bias_cut=0.):
+    ndim = len(offsets[0])
+    assert all(len(off) == ndim for off in offsets)
+    image_shape = weights.shape[1:]
+
+    valid_edges = get_valid_edges(weights.shape, offsets, number_of_attractive_channels,
+                                  strides, randomize_strides)
+    if invert_repulsive_weights:
+        weights[number_of_attractive_channels:] *= -1
+        weights[number_of_attractive_channels:] += 1
+    weights[:number_of_attractive_channels] += bias_cut
+
+    masked_weights = np.ma.masked_array(weights, mask=np.logical_not(valid_edges))
+
+    tick = time.time()
+    sorted_flat_indices = np.argsort(masked_weights, axis=None)[::-1]
+    tock = time.time()
+    print("Sorted edges in {}s".format(tock-tick))
+
+    return valid_edges.ravel().astype('bool'), sorted_flat_indices.astype('uint64')
+
+def run_mws(sorted_flat_indices,
+                valid_edges,
+                        offsets,
+                        number_of_attractive_channels,
+                        image_shape,
+                        algorithm='kruskal'):
+    assert algorithm in ('kruskal', 'divisive'), "Unsupported algorithm, %s" % algorithm
+    if algorithm == 'kruskal':
+        labels = compute_mws_segmentation_impl(sorted_flat_indices,
+                                               valid_edges.ravel(),
+                                               offsets,
+                                               number_of_attractive_channels,
+                                               image_shape)
+    else:
+        labels = compute_divisive_mws_segmentation_impl(sorted_flat_indices,
+                                                    valid_edges.ravel(),
+                                                    offsets,
+                                                    number_of_attractive_channels,
+                                                    image_shape)
+
+
+
 
 def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
                              strides=None, randomize_strides=False, invert_repulsive_weights=True,
@@ -49,6 +94,7 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
 
     valid_edges = get_valid_edges(weights.shape, offsets, number_of_attractive_channels,
                                   strides, randomize_strides)
+    weights = np.copy(weights)
     if invert_repulsive_weights:
         weights[number_of_attractive_channels:] *= -1
         weights[number_of_attractive_channels:] += 1
@@ -71,7 +117,7 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
                                                offsets,
                                                number_of_attractive_channels,
                                                image_shape)
-        else:
+        elif algorithm == 'divisive':
             labels = compute_divisive_mws_segmentation_impl(sorted_flat_indices,
                                                    valid_edges.ravel(),
                                                    offsets,

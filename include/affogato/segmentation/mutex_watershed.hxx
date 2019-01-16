@@ -43,6 +43,7 @@ namespace segmentation {
 
 
     // merge the mutex edges by merging from 'root_from' to 'root_to'
+    // and avoid double constraints between the same two clusters
     template<class MUTEX_STORAGE>
     inline void merge_mutexes(const uint64_t root_from, const uint64_t root_to,
                               MUTEX_STORAGE & mutexes) {
