@@ -35,9 +35,9 @@ def get_valid_edges(shape, offsets, number_of_attractive_channels,
     if mask is not None:
         assert mask.shape == image_shape, "%s, %s" % (str(mask.shape), str(image_shape))
         assert mask.dtype == np.dtype('bool'), str(mask.dtype)
-        transition_to_mask, _ = compute_affinities(mask, offsets)
-        transition_to_mask = transition_to_mask.astype('bool')
         # mask transitions to mask
+        transition_to_mask, _ = compute_affinities(mask, offsets)
+        transition_to_mask = transition_to_mask == 0
         valid_edges[transition_to_mask] = False
         # mask within mask
         valid_edges[:, mask] = False
@@ -58,7 +58,7 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
     # for computation, we need the opposite though
     inv_mask = None if mask is None else np.logical_not(mask)
     valid_edges = get_valid_edges(weights.shape, offsets, number_of_attractive_channels,
-                                  strides, randomize_strides, mask)
+                                  strides, randomize_strides, inv_mask)
 
     if algorithm == 'kruskal':
         # sort and flatten weights
