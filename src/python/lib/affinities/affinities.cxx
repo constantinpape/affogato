@@ -86,9 +86,11 @@ PYBIND11_MODULE(_affinities, m)
 
     using namespace affogato;
 
+    // bool export to compute affinity transitions to masks
+    export_affinities_T<bool>(m);
     export_affinities_T<uint64_t>(m);
     export_affinities_T<int64_t>(m);
-    
+
     export_multiscale_affinities_T<uint64_t>(m);
     export_multiscale_affinities_T<int64_t>(m);
 }
