@@ -94,10 +94,7 @@ include_directories(${Boost_INCLUDE_DIR})
 # Python-bindings
 ###############################
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_PREFIX_PATH}/share/cmake/pybind11")
-include(pybind11Tools)
-
-# numpy
+find_package(pybind11 REQUIRED)
 set(PYBIND11_CPP_STANDARD -std=c++14)
 
 

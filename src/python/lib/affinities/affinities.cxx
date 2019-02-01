@@ -7,6 +7,7 @@
 
 #include "affogato/affinities/affinities.hxx"
 #include "affogato/affinities/multiscale_affinities.hxx"
+#include "affogato/affinities/embedding_distances.hxx"
 
 namespace py = pybind11;
 
@@ -43,6 +44,51 @@ namespace affogato {
                py::arg("have_ignore_label")=false,
                py::arg("ignore_label")=0);
     }
+
+
+    // for now we only export L2 norm
+    template<typename T>
+    void export_embedding_distances_T(py::module & m) {
+        m.def("compute_embedding_distances", [](const xt::pyarray<T> & values,
+                                                const std::vector<std::vector<int>> & offsets) {
+            // compute the out shape
+            typedef typename xt::pyarray<float>::shape_type ShapeType;
+            const auto & shape = values.shape();
+            const unsigned ndim = values.dimension() - 1;
+            ShapeType out_shape(ndim + 1);
+            out_shape[0] = offsets.size();
+            for(unsigned d = 1; d < ndim + 1; ++d) {
+                out_shape[d] = shape[d];
+            }
+
+            auto l2norm = [](const xt::pyarray<float> & values, const xt::xindex & coord1, const xt::xindex & coord2) {
+                const int64_t ndim = values.dimension();
+                // full coordinate
+                xt::xindex coordA(ndim), coordB(ndim);
+                // copy spatial
+                std::copy(coord1.begin(), coord1.end(), coordA.begin() + 1);
+                std::copy(coord2.begin(), coord2.end(), coordB.begin() + 1);
+                float ret = 0;
+
+                const int64_t n_channels = values.shape()[0];
+                for(int c = 0; c < n_channels; ++c) {
+                    coordA[0] = c;
+                    coordB[0] = c;
+                    ret += pow((values[coordA] - values[coordB]), 2.);
+                }
+                return sqrt(ret);
+            };
+
+            // allocate the output
+            xt::pyarray<float> distances = xt::zeros<float>(out_shape);
+            {
+                py::gil_scoped_release allowThreads;
+                affinities::compute_embedding_distances_impl(values, offsets, distances, l2norm);
+            }
+            return distances;
+        }, py::arg("values").noconvert(), py::arg("offset"));
+    }
+
 
     //
     template<typename T>
@@ -93,4 +139,6 @@ PYBIND11_MODULE(_affinities, m)
 
     export_multiscale_affinities_T<uint64_t>(m);
     export_multiscale_affinities_T<int64_t>(m);
+
+    export_embedding_distances_T<float>(m);
 }
