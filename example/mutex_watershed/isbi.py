@@ -56,7 +56,6 @@ def mws_segmentation(affs):
 
 
 def nifty_mws_segmentation(affs):
-    from nifty.mws import computeMwsClustering
     t0 = time.time()
     shape = affs.shape[1:]
     graph = nifty.graph.undirectedGridGraph(shape)
@@ -67,12 +66,9 @@ def nifty_mws_segmentation(affs):
     lifted_uvs = lifted_uvs[:n_lifted]
     lifted_weights = lifted_weights[:n_lifted]
 
-    # seg = compute_mws_clustering(graph.numberOfNodes,
-    #                              local_uvs, lifted_uvs,
-    #                              local_weights, lifted_weights).reshape(shape)
-    seg = computeMwsClustering(graph.numberOfNodes,
-                               local_uvs, lifted_uvs,
-                               local_weights, lifted_weights).reshape(shape)
+    seg = compute_mws_clustering(graph.numberOfNodes,
+                                 local_uvs, lifted_uvs,
+                                 local_weights, lifted_weights).reshape(shape)
     return seg, time.time() - t0
 
 
