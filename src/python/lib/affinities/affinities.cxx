@@ -49,8 +49,10 @@ namespace affogato {
     // for now we only export L2 norm
     template<typename T>
     void export_embedding_distances_T(py::module & m) {
-        m.def("compute_embedding_distances", [](const xt::pyarray<T> & values,
-                                                const std::vector<std::vector<int>> & offsets) {
+
+        // l2 norm
+        m.def("compute_embedding_distances_l2", [](const xt::pyarray<T> & values,
+                                                   const std::vector<std::vector<int>> & offsets) {
             // compute the out shape
             typedef typename xt::pyarray<float>::shape_type ShapeType;
             const auto & shape = values.shape();
@@ -61,7 +63,9 @@ namespace affogato {
                 out_shape[d] = shape[d];
             }
 
-            auto l2norm = [](const xt::pyarray<float> & values, const xt::xindex & coord1, const xt::xindex & coord2) {
+            auto l2norm = [](const xt::pyarray<float> & values,
+                             const xt::xindex & coord1,
+                             const xt::xindex & coord2) {
                 const int64_t ndim = values.dimension();
                 // full coordinate
                 xt::xindex coordA(ndim), coordB(ndim);
@@ -84,6 +88,60 @@ namespace affogato {
             {
                 py::gil_scoped_release allowThreads;
                 affinities::compute_embedding_distances_impl(values, offsets, distances, l2norm);
+            }
+            return distances;
+        }, py::arg("values").noconvert(), py::arg("offset"));
+
+        // NOTE: we assume positive embeddings here, otherwise we could
+        // negative cosine similarity, which would result in return values > 1
+        // cosine distance
+        m.def("compute_embedding_distances_cos", [](const xt::pyarray<T> & values,
+                                                    const std::vector<std::vector<int>> & offsets) {
+            // compute the out shape
+            typedef typename xt::pyarray<float>::shape_type ShapeType;
+            const auto & shape = values.shape();
+            const unsigned ndim = values.dimension() - 1;
+            ShapeType out_shape(ndim + 1);
+            out_shape[0] = offsets.size();
+            for(unsigned d = 1; d < ndim + 1; ++d) {
+                out_shape[d] = shape[d];
+            }
+
+            auto cos_dist = [](const xt::pyarray<float> & values,
+                               const xt::xindex & coord1,
+                               const xt::xindex & coord2) {
+                const int64_t ndim = values.dimension();
+                // full coordinate
+                xt::xindex coordA(ndim), coordB(ndim);
+                // copy spatial
+                std::copy(coord1.begin(), coord1.end(), coordA.begin() + 1);
+                std::copy(coord2.begin(), coord2.end(), coordB.begin() + 1);
+
+                double dot = 0;
+                double normA = 0;
+                double normB = 0;
+
+                const int64_t n_channels = values.shape()[0];
+                for(int c = 0; c < n_channels; ++c) {
+                    coordA[0] = c;
+                    coordB[0] = c;
+                    const T valA = values[coordA];
+                    const T valB = values[coordB];
+                    dot += valA * valB;
+                    normA += valA * valA;
+                    normB += valB * valB;
+                }
+                normA = sqrt(normA);
+                normB = sqrt(normB);
+                float ret = 1. - dot / (normA * normB);
+                return ret;
+            };
+
+            // allocate the output
+            xt::pyarray<float> distances = xt::zeros<float>(out_shape);
+            {
+                py::gil_scoped_release allowThreads;
+                affinities::compute_embedding_distances_impl(values, offsets, distances, cos_dist);
             }
             return distances;
         }, py::arg("values").noconvert(), py::arg("offset"));
