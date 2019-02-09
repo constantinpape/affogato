@@ -10,9 +10,9 @@ except ImportError:
 
 def compute_embedding_distances(values, offsets, norm='l2'):
     if norm == 'l2':
-        return embedding_distances_l2(values, offsets)
+        return compute_embedding_distances_l2(values, offsets)
     elif norm == 'cosine':
-        return embedding_distances_cos(values, offsets)
+        return compute_embedding_distances_cos(values, offsets)
     else:
         raise ValueError("Invalid norm %s" % norm)
 
