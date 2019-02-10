@@ -19,10 +19,11 @@ def get_valid_edges(shape, offsets, number_of_attractive_channels,
     # mask additional edges if we have strides
     if strides is not None:
         assert len(strides) == ndim
-        # TODO implement randomized strides
         if randomize_strides:
-            stride_factor = np.prod(strides)
-            raise NotImplementedError("Randomized strides not implemented yet!")
+            stride_factor = 1 / np.prod(strides)
+            stride_edges = np.random.rand(*valid_edges.shape) < stride_factor
+            stride_edges[:number_of_attractive_channels] = 1
+            valid_edges = np.logical_and(valid_edges, stride_edges)
         else:
             stride_edges = np.zeros_like(valid_edges, dtype='bool')
             stride_edges[:number_of_attractive_channels] = 1
