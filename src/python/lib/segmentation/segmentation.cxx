@@ -63,6 +63,7 @@ PYBIND11_MODULE(_segmentation, m)
             number_of_nodes *= s;
         }
         xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({number_of_nodes});
+        xt::pytensor<int64_t, 1> semantic_labeling = - xt::ones<int64_t>({number_of_nodes});
         {
             py::gil_scoped_release allowThreads;
             segmentation::compute_mws_segmentation(sorted_flat_indices,
@@ -70,9 +71,10 @@ PYBIND11_MODULE(_segmentation, m)
                                                    offsets,
                                                    number_of_attractive_channels,
                                                    image_shape,
-                                                   node_labeling);
+                                                   node_labeling,
+                                                   semantic_labeling);
         }
-        return node_labeling;
+        return node_labeling, semantic_labeling;
     }, py::arg("sorted_flat_indices"),
        py::arg("valid_edges"),
        py::arg("offsets"),
