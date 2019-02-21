@@ -189,10 +189,11 @@ PYBIND11_MODULE(_segmentation, m)
         .def("get_causal_edges", [](const GraphType & self,
                                     const xt::pyarray<float> & affs,
                                     const xt::pyarray<uint64_t> & labels,
-                                    const std::vector<std::vector<std::size_t>> & offsets){
+                                    const std::vector<std::vector<std::size_t>> & offsets,
+                                    const uint64_t id_offset){
             std::vector<std::pair<uint64_t, uint64_t>> uvs;
             std::vector<float> w;
-            self.get_causal_edges(affs, labels, offsets, uvs, w);
+            self.get_causal_edges(affs, labels, offsets, id_offset, uvs, w);
 
             xt::pytensor<uint64_t, 2> uv_ids = xt::zeros<uint64_t>({static_cast<int64_t>(uvs.size()), static_cast<int64_t>(2)});
             xt::pytensor<float, 1> weights = xt::zeros<float>({static_cast<int64_t>(w.size())});
@@ -204,7 +205,7 @@ PYBIND11_MODULE(_segmentation, m)
             }
 
             return std::make_pair(uv_ids, weights);
-        })
+        }, py::arg("affinities"), py::arg("labels"), py::arg("offsets"), py::arg("id_offset"))
     ;
 
 }

@@ -82,8 +82,8 @@ def compute_causal_mws(weights, offsets, mask,
         # TODO support causal strides
         # connect the grid graph to region graph of the last time step
         causal_weights = np.require(weights[causal_channels, t], requirements='C')
-        # FIXME: pass along n_nodes_prev to make nodes unique again
-        causal_uvs, causal_costs = graph.get_causal_edges(causal_weights, seg_prev, causal_offsets)
+        causal_uvs, causal_costs = graph.get_causal_edges(causal_weights, seg_prev,
+                                                          causal_offsets, n_nodes_prev)
 
         # concat all edges
         uvs = np.concatenate([uvs, causal_uvs], axis=0)

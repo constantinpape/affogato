@@ -68,7 +68,7 @@ namespace segmentation {
         // would be 1 dim bigger than _dim
         template<class AFFS, class LABELS>
         void get_causal_edges(const AFFS & affs, const LABELS & labels, const std::vector<OffsetType> & offsets,
-                              std::vector<EdgeType> & uv_ids, std::vector<float> & weights) const {
+                              const uint64_t id_offset, std::vector<EdgeType> & uv_ids, std::vector<float> & weights) const {
             // get iteration shape
             auto iter_shape = _aff_shape;
             iter_shape[0] = offsets.size();
@@ -115,6 +115,7 @@ namespace segmentation {
                     }
                 }
 
+                u += id_offset;
                 if(u > v) {
                     std::swap(u, v);
                 }
