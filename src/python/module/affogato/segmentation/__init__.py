@@ -48,7 +48,7 @@ def get_valid_edges(shape, offsets, number_of_attractive_channels,
 
 def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
                              strides=None, randomize_strides=False,
-                             algorithm='kruskal', mask=None):
+                             algorithm='kruskal', mask=None, mask_label=0):
     assert algorithm in ('kruskal', 'prim'), "Unsupported algorithm, %s" % algorithm
     ndim = len(offsets[0])
     assert all(len(off) == ndim for off in offsets)
@@ -67,11 +67,12 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
         masked_weights = np.ma.masked_array(weights, mask=np.logical_not(valid_edges))
         sorted_flat_indices = np.argsort(masked_weights, axis=None)[::-1]
 
-        labels = compute_mws_segmentation_impl(sorted_flat_indices,
-                                               valid_edges.ravel(),
-                                               offsets,
-                                               number_of_attractive_channels,
-                                               image_shape)
+        labels, semantic_labels = compute_mws_segmentation_impl(sorted_flat_indices,
+                                                                valid_edges.ravel(),
+                                                                offsets,
+                                                                number_of_attractive_channels,
+                                                                image_shape)
+        semantic_labels.reshape(image_shape)
     else:
         labels = compute_mws_prim_segmentation_impl(weights.ravel(),
                                                     valid_edges.ravel(),
@@ -85,4 +86,5 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
         # increase labels by 1, so we don't merge anything with the mask
         labels += 1
         labels[inv_mask] = 0
-    return labels
+        semantic_labels[inv_mask] = mask_label
+    return labels, semantic_labels

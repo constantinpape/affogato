@@ -74,7 +74,8 @@ PYBIND11_MODULE(_segmentation, m)
                                                    node_labeling,
                                                    semantic_labeling);
         }
-        return node_labeling, semantic_labeling;
+        py::tuple out = py::make_tuple(node_labeling, semantic_labeling);
+        return out;
     }, py::arg("sorted_flat_indices"),
        py::arg("valid_edges"),
        py::arg("offsets"),
