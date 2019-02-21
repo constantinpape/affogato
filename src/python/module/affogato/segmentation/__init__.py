@@ -72,7 +72,7 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
                                                                 offsets,
                                                                 number_of_attractive_channels,
                                                                 image_shape)
-        semantic_labels.reshape(image_shape)
+        semantic_labels = semantic_labels.reshape(image_shape)
     else:
         labels = compute_mws_prim_segmentation_impl(weights.ravel(),
                                                     valid_edges.ravel(),
