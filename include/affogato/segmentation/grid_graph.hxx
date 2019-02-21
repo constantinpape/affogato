@@ -15,7 +15,6 @@ namespace segmentation {
         typedef std::pair<uint64_t, uint64_t> EdgeType;
         typedef std::vector<std::size_t> OffsetType;
 
-
         template<class AFFS>
         MWSGridGraph(const AFFS & affs, const std::vector<OffsetType> & offsets,
                      const std::vector<std::size_t> & strides, const bool randomize_strides) :
@@ -24,6 +23,19 @@ namespace segmentation {
         _ndim(_shape.size()) {
             // initializers
             init_strides();
+            init_nn(affs, offsets);
+            init_lr(affs, offsets, strides, randomize_strides);
+        }
+
+        template<class AFFS, class MASK>
+        MWSGridGraph(const AFFS & affs, const MASK & mask, const std::vector<OffsetType> & offsets,
+                     const std::vector<std::size_t> & strides, const bool randomize_strides) :
+        _aff_shape(affs.shape().begin(), affs.shape().end()),
+        _shape(_aff_shape.begin() + 1, _aff_shape.end()),
+        _ndim(_shape.size()) {
+            // initializers
+            init_strides();
+            init_mask(mask);
             init_nn(affs, offsets);
             init_lr(affs, offsets, strides, randomize_strides);
         }
@@ -52,6 +64,66 @@ namespace segmentation {
             return _lr_weights;
         }
 
+        // TODO we need to generalize this to support more than one time-step back ! than labels
+        // would be 1 dim bigger than _dim
+        template<class AFFS, class LABELS>
+        void get_causal_edges(const AFFS & affs, const LABELS & labels, const std::vector<OffsetType> & offsets,
+                              std::vector<EdgeType> & uv_ids, std::vector<float> & weights) const {
+            // get iteration shape
+            auto iter_shape = _aff_shape;
+            iter_shape[0] = offsets.size();
+            xt::xindex coord(_ndim), prev_coord(_ndim);
+            // iterate over the causal offsets
+            util::for_each_coordinate(iter_shape, [&](const xt::xindex & aff_coord){
+                // set the spatial coordinates
+                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
+                prev_coord = coord;
+
+                // set the spatial coords from the offsets
+                const auto & offset = offsets[aff_coord[0]];
+
+                // TODO for now we assume implicitely that offset[0] = -1 and that labels.ndim == _ndim
+                // need to generalize this to arbitrary causal offsets
+
+                // check that we are in range
+                bool out_of_range = false;
+                for(unsigned d = 0; d < _ndim; ++d) {
+                    prev_coord[d] += offset[d + 1];
+                    if(prev_coord[d] < 0 || prev_coord[d] >= _shape[d]) {
+                        out_of_range = true;
+                        break;
+                    }
+                }
+                if(out_of_range) {
+                    return;
+                }
+
+                // insert the edge and weight corresponding to this grid connection
+                uint64_t u = get_node(coord);
+                uint64_t v = labels[prev_coord];
+
+                // check if v is masked
+                if(v == 0) {
+                    return;
+                }
+
+                // if we have a mask,
+                // check if any of the nodes is masked
+                if(_masked_nodes.size()) {
+                    if(_masked_nodes[u]) {
+                        return;
+                    }
+                }
+
+                if(u > v) {
+                    std::swap(u, v);
+                }
+
+                uv_ids.emplace_back(u, v);
+                weights.emplace_back(affs[aff_coord]);
+            });
+        }
+
     private:
 
         void init_strides() {
@@ -60,6 +132,16 @@ namespace segmentation {
             for(unsigned d = _ndim - 2; d >= 0; --d) {
                 _strides[d] = _shape[d + 1] * _strides[d + 1];
             }
+        }
+
+        template<class MASK>
+        void init_mask(const MASK & mask) {
+            const std::size_t n_nodes = std::accumulate(_shape.begin(), _shape.end(),
+                                                        1, std::multiplies<std::size_t>());
+            _masked_nodes.resize(n_nodes);
+            util::for_each_coordinate(_shape, [&](const xt::xindex & coord){
+                _masked_nodes[get_node(coord)] = mask[coord] == 0;
+            });
         }
 
         template<class AFFS>
@@ -94,6 +176,15 @@ namespace segmentation {
                 // insert the edge and weight corresponding to this grid connection
                 uint64_t u = get_node(coord);
                 uint64_t v = get_node(ngb_coord);
+
+                // if we have a mask,
+                // check if any of the nodes is masked
+                if(_masked_nodes.size()) {
+                    if(_masked_nodes[u] || _masked_nodes[v]) {
+                        return;
+                    }
+                }
+
                 if(u > v) {
                     std::swap(u, v);
                 }
@@ -160,6 +251,15 @@ namespace segmentation {
                 // insert the edge and weight corresponding to this grid connection
                 uint64_t u = get_node(coord);
                 uint64_t v = get_node(ngb_coord);
+
+                // if we have a mask,
+                // check if any of the nodes is masked
+                if(_masked_nodes.size()) {
+                    if(_masked_nodes[u] || _masked_nodes[v]) {
+                        return;
+                    }
+                }
+
                 if(u > v) {
                     std::swap(u, v);
                 }
@@ -215,6 +315,15 @@ namespace segmentation {
                 // insert the edge and weight corresponding to this grid connection
                 uint64_t u = get_node(coord);
                 uint64_t v = get_node(ngb_coord);
+
+                // if we have a mask,
+                // check if any of the nodes is masked
+                if(_masked_nodes.size()) {
+                    if(_masked_nodes[u] || _masked_nodes[v]) {
+                        return;
+                    }
+                }
+
                 if(u > v) {
                     std::swap(u, v);
                 }
@@ -273,6 +382,15 @@ namespace segmentation {
                 // insert the edge and weight corresponding to this grid connection
                 uint64_t u = get_node(coord);
                 uint64_t v = get_node(ngb_coord);
+
+                // if we have a mask,
+                // check if any of the nodes is masked
+                if(_masked_nodes.size()) {
+                    if(_masked_nodes[u] || _masked_nodes[v]) {
+                        return;
+                    }
+                }
+
                 if(u > v) {
                     std::swap(u, v);
                 }
@@ -293,6 +411,7 @@ namespace segmentation {
         std::vector<EdgeType> _lr_uv_ids;
         std::vector<float> _weights;
         std::vector<float> _lr_weights;
+        std::vector<bool> _masked_nodes;
     };
 
 

@@ -133,11 +133,18 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("merge_threshold"));
 
 
+    // TODO lift gil where appropriate
     typedef segmentation::MWSGridGraph GraphType;
     py::class_<GraphType>(m, "MWSGridGraph")
         .def(py::init<const xt::pyarray<float> &, const std::vector<std::vector<std::size_t>> &,
                       const std::vector<std::size_t> &, const bool>(),
              py::arg("affinities"), py::arg("offsets"),
+             py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
+             py::arg("randomize_strides")=true)
+
+        .def(py::init<const xt::pyarray<float> &, const xt::pyarray<bool> &, const std::vector<std::vector<std::size_t>> &,
+                      const std::vector<std::size_t> &, const bool>(),
+             py::arg("affinities"), py::arg("mask"), py::arg("offsets"),
              py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
              py::arg("randomize_strides")=true)
 
@@ -177,6 +184,26 @@ PYBIND11_MODULE(_segmentation, m)
                 weights[e] = w[e];
             }
             return weights;
+        })
+
+        .def("get_causal_edges", [](const GraphType & self,
+                                    const xt::pyarray<float> & affs,
+                                    const xt::pyarray<uint64_t> & labels,
+                                    const std::vector<std::vector<std::size_t>> & offsets){
+            std::vector<std::pair<uint64_t, uint64_t>> uvs;
+            std::vector<float> w;
+            self.get_causal_edges(affs, labels, offsets, uvs, w);
+
+            xt::pytensor<uint64_t, 2> uv_ids = xt::zeros<uint64_t>({static_cast<int64_t>(uvs.size()), static_cast<int64_t>(2)});
+            xt::pytensor<float, 1> weights = xt::zeros<float>({static_cast<int64_t>(w.size())});
+
+            for(std::size_t e = 0; e < w.size(); ++e) {
+                uv_ids(e, 0) = uvs[e].first;
+                uv_ids(e, 1) = uvs[e].second;
+                weights[e] = w[e];
+            }
+
+            return std::make_pair(uv_ids, weights);
         })
     ;
 
