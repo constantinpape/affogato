@@ -38,6 +38,8 @@ def compute_causal_mws(weights, offsets, mask,
 
         # compute the grid-graph of the current time-step
 
+        # compute the region graph of the last time step; connecting all regions by mutex edges
+
         # connect the grid graph to region graph of the last time step
 
         seg_t = compute_mws_clustering(graph).reshape(shape[1:])
