@@ -43,7 +43,13 @@ def compute_causal_mws(weights, offsets, mask,
     # segment the first time step un-constrained
     weights0 = np.require(weights[spatial_channels, 0], requirements='C')
     mask0 = np.require(mask[0], requirements='C')
-    seg0 = compute_mws_segmentation(weights0, spatial_offsets, ndim_spatial, strides=strides[1:],
+
+
+    # TODO: generalize this to more than one attractive offset per dim
+    #  implicit assumption is that we have a direct grid graph
+    nattractive_spatial = ndim_spatial
+
+    seg0 = compute_mws_segmentation(weights0, spatial_offsets, nattractive_spatial, strides=strides[1:],
                                     randomize_strides=randomize_strides, mask=mask0)
     segmentation[0] = seg0
 
@@ -53,11 +59,11 @@ def compute_causal_mws(weights, offsets, mask,
         # compute the region graph of the last time step, connect all regions by mutex edges
         seg_prev = segmentation[t - 1]
         seg_ids = np.unique(seg_prev)
+
         if seg_ids[0] == 0:
             seg_ids = seg_ids[1:]
         mutex_uvs_prev = cartesian_product(seg_ids)
         n_nodes_prev = int(mutex_uvs_prev.max()) + 1
-        # TODO does edge strength increase or decrease with value ???
         mutex_costs_prev = 2 * np.ones(len(mutex_uvs_prev), dtype='float32')
 
         # compute the spatial grid-graph of the current time-step
@@ -76,6 +82,7 @@ def compute_causal_mws(weights, offsets, mask,
         # TODO support causal strides
         # connect the grid graph to region graph of the last time step
         causal_weights = np.require(weights[causal_channels, t], requirements='C')
+        # FIXME: pass along n_nodes_prev to make nodes unique again
         causal_uvs, causal_costs = graph.get_causal_edges(causal_weights, seg_prev, causal_offsets)
 
         # concat all edges
@@ -88,7 +95,11 @@ def compute_causal_mws(weights, offsets, mask,
         # TODO initialize with roots for nodes from seg_prev and make sure
         # that these stay mapped to the same id
         seg_t = compute_mws_clustering(n_nodes, uvs, mutex_uvs,
-                                       costs, mutex_costs).reshape(shape[1:])
-        segmentation[t] = seg_t
+                                       costs, mutex_costs)
+
+        prev_nodes, seg_t = seg_t[:n_nodes_prev], seg_t[n_nodes_prev:]
+        # TODO : relabels seg_t using seg_ids and prev_nodes
+
+        segmentation[t] = seg_t.reshape(shape[1:])
 
     return segmentation
