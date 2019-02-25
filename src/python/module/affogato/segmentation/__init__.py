@@ -25,17 +25,14 @@ def get_valid_edges(weights, offsets, number_of_attractive_channels,
         if randomize_strides:
             stride_factor = 1 / np.prod(strides)
             stride_edges = np.random.rand(*valid_edges.shape) < stride_factor
-            stride_edges[:number_of_attractive_channels] = 1
-            stride_edges[noffsets:] = 1
-            valid_edges = np.logical_and(valid_edges, stride_edges)
         else:
             stride_edges = np.zeros_like(valid_edges, dtype='bool')
-            stride_edges[:number_of_attractive_channels] = 1
-            stride_edges[noffsets:] = 1
             valid_slice = (slice(number_of_attractive_channels, noffsets),) +\
                 tuple(slice(None, None, stride) for stride in strides)
             stride_edges[valid_slice] = 1
-            valid_edges = np.logical_and(valid_edges, stride_edges)
+        stride_edges[:number_of_attractive_channels] = 1
+        stride_edges[noffsets:] = 1
+        valid_edges = np.logical_and(valid_edges, stride_edges)
 
     # mask semantic edges, keep only maximum for each pixel
     if shape[0] > noffsets:
