@@ -39,18 +39,14 @@ def get_valid_edges(weights, offsets, number_of_attractive_channels,
         # with advanced indexing, but is not significantly faster
         # idx = np.argmax(weights[noffsets:], axis=0)
         # max_idx = (idx,) + tuple(np.ix_(*[np.arange(i) for i in image_shape]))
-        non_max_mask = weights[noffsets:].max(axis=0, keepdims=True) != weights[noffsets:]
-        valid_edges[noffsets:][non_max_mask] = False
+        valid_edges[noffsets:] = weights[noffsets:].max(axis=0, keepdims=True) == weights[noffsets:]
 
     # if we have an external mask, mask all transitions to and within that mask
     if mask is not None:
         assert mask.shape == image_shape, "%s, %s" % (str(mask.shape), str(image_shape))
         assert mask.dtype == np.dtype('bool'), str(mask.dtype)
         # mask transitions to mask
-        # sem_offsets = np.zeros((shape[0] - noffsets, ndim), dtype=np.int)
-        # _offsets = np.concatenate((offsets, sem_offsets), axis=0)
-        # transition_to_mask, _ = compute_affinities(mask, _offsets)
-        transition_to_mask, _ = compute_affinities(mask[:noffsets], offsets)
+        transition_to_mask, _ = compute_affinities(mask, offsets)
         transition_to_mask = transition_to_mask == 0
         valid_edges[:noffsets][transition_to_mask] = False
         # mask within mask
