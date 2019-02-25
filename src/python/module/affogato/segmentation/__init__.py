@@ -3,11 +3,14 @@ from ._segmentation import *
 from ..affinities import compute_affinities
 
 
-def get_valid_edges(shape, offsets, number_of_attractive_channels,
+def get_valid_edges(weights, offsets, number_of_attractive_channels,
                     strides, randomize_strides, mask=None):
     # compute valid edges
+    noffsets = len(offsets)
     ndim = len(offsets[0])
+    shape = weights.shape
     image_shape = shape[1:]
+
     valid_edges = np.ones(shape, dtype=bool)
     for i, offset in enumerate(offsets):
         for j, o in enumerate(offset):
@@ -23,23 +26,36 @@ def get_valid_edges(shape, offsets, number_of_attractive_channels,
             stride_factor = 1 / np.prod(strides)
             stride_edges = np.random.rand(*valid_edges.shape) < stride_factor
             stride_edges[:number_of_attractive_channels] = 1
+            stride_edges[noffsets:] = 1
             valid_edges = np.logical_and(valid_edges, stride_edges)
         else:
             stride_edges = np.zeros_like(valid_edges, dtype='bool')
             stride_edges[:number_of_attractive_channels] = 1
-            valid_slice = (slice(number_of_attractive_channels, None),) +\
+            stride_edges[noffsets:] = 1
+            valid_slice = (slice(number_of_attractive_channels, noffsets),) +\
                 tuple(slice(None, None, stride) for stride in strides)
             stride_edges[valid_slice] = 1
             valid_edges = np.logical_and(valid_edges, stride_edges)
+
+    # mask semantic edges, keep only maximum for each pixel
+    if shape[0] > noffsets:
+        # with advanced indexing, but is not significantly faster
+        # idx = np.argmax(weights[noffsets:], axis=0)
+        # max_idx = (idx,) + tuple(np.ix_(*[np.arange(i) for i in image_shape]))
+        non_max_mask = weights[noffsets:].max(axis=0, keepdims=True) != weights[noffsets:]
+        valid_edges[noffsets:][non_max_mask] = False
 
     # if we have an external mask, mask all transitions to and within that mask
     if mask is not None:
         assert mask.shape == image_shape, "%s, %s" % (str(mask.shape), str(image_shape))
         assert mask.dtype == np.dtype('bool'), str(mask.dtype)
         # mask transitions to mask
-        transition_to_mask, _ = compute_affinities(mask, offsets)
+        # sem_offsets = np.zeros((shape[0] - noffsets, ndim), dtype=np.int)
+        # _offsets = np.concatenate((offsets, sem_offsets), axis=0)
+        # transition_to_mask, _ = compute_affinities(mask, _offsets)
+        transition_to_mask, _ = compute_affinities(mask[:noffsets], offsets)
         transition_to_mask = transition_to_mask == 0
-        valid_edges[transition_to_mask] = False
+        valid_edges[:noffsets][transition_to_mask] = False
         # mask within mask
         valid_edges[:, mask] = False
 
@@ -58,7 +74,7 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
     # and invalid regions are set to false.
     # for computation, we need the opposite though
     inv_mask = None if mask is None else np.logical_not(mask)
-    valid_edges = get_valid_edges(weights.shape, offsets, number_of_attractive_channels,
+    valid_edges = get_valid_edges(weights, offsets, number_of_attractive_channels,
                                   strides, randomize_strides, inv_mask)
 
     if algorithm == 'kruskal':
@@ -80,6 +96,7 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
                                                     number_of_attractive_channels,
                                                     image_shape)
 
+    _, labels = np.unique(labels, return_inverse=True)
     labels = labels.reshape(image_shape)
     # if we had an external mask, make sure it is mapped to zero
     if mask is not None:
