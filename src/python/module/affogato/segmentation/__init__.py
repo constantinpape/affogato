@@ -1,6 +1,3 @@
-from ._segmentation import connected_components, compure_zws_segmentation, compute_mws_clustering
+from ._segmentation import connected_components, compute_zws_segmentation, compute_mws_clustering
 from .mws import compute_mws_segmentation
-try:
-    from .causal_mws import compute_causal_mws
-except ImportError:
-    print("Cannot import causal-mws due to missing nifty")
+from .causal_mws import compute_causal_mws

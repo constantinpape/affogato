@@ -1,8 +1,6 @@
-from itertools import product
 import numpy as np
-import nifty
 
-from .mws import get_valid_edges, compute_mws_segmentation
+from .mws import compute_mws_segmentation
 from ._segmentation import compute_mws_clustering, MWSGridGraph
 
 
@@ -19,7 +17,7 @@ def compute_causal_mws(weights, offsets, mask,
     assert mask.shape == weights.shape[1:]
     ndim_spatial = mask.ndim - 1
     assert ndim_spatial == 2, "We only support 2d + t for now"
-    assert len(offsets) == weigths.shape[0]
+    assert len(offsets) == weights.shape[0]
     # TODO support causal strides
     if strides is None:
         strides = [1] * ndim_spatial
@@ -44,17 +42,18 @@ def compute_causal_mws(weights, offsets, mask,
     weights0 = np.require(weights[spatial_channels, 0], requirements='C')
     mask0 = np.require(mask[0], requirements='C')
 
-
     # TODO: generalize this to more than one attractive offset per dim
     #  implicit assumption is that we have a direct grid graph
     nattractive_spatial = ndim_spatial
 
-    seg0 = compute_mws_segmentation(weights0, spatial_offsets, nattractive_spatial, strides=strides[1:],
+    print("Run first unconstrained mws")
+    seg0 = compute_mws_segmentation(weights0, spatial_offsets, nattractive_spatial, strides=strides,
                                     randomize_strides=randomize_strides, mask=mask0)
     segmentation[0] = seg0
 
     # segment all other time steps constrained on the previous time step
     for t in range(1, n_time_steps):
+        print("Run constrained mws for t", t)
 
         # compute the region graph of the last time step, connect all regions by mutex edges
         seg_prev = segmentation[t - 1]
@@ -69,7 +68,9 @@ def compute_causal_mws(weights, offsets, mask,
         # compute the spatial grid-graph of the current time-step
         weights_t = np.require(weights[spatial_channels, t], requirements='C')
         mask_t = np.require(mask[t], requirements='C')
-        graph = MWSGridGraph(weights_t, mask_t, spatial_offsets, strides, randomize_strides)
+        graph = MWSGridGraph(mask_t.shape)
+        graph.set_mask(mask_t)
+        graph.compute_weights_and_nh_from_affs(weights_t, spatial_offsets, strides, randomize_strides)
 
         # uv ids and costs (= weights for mutex watershed) from current graph
         uvs, mutex_uvs = graph.uv_ids(), graph.lr_uv_ids()
@@ -87,19 +88,16 @@ def compute_causal_mws(weights, offsets, mask,
 
         # concat all edges
         uvs = np.concatenate([uvs, causal_uvs], axis=0)
-        costs = np.concatenate([weights, causal_weights], axis=0)
+        costs = np.concatenate([costs, causal_costs], axis=0)
         mutex_uvs = np.concatenate([mutex_uvs, mutex_uvs_prev], axis=0)
         mutex_costs = np.concatenate([mutex_costs, mutex_costs_prev], axis=0)
 
         n_nodes = int(uvs.max()) + 1
-        # TODO initialize with roots for nodes from seg_prev and make sure
-        # that these stay mapped to the same id
         seg_t = compute_mws_clustering(n_nodes, uvs, mutex_uvs,
                                        costs, mutex_costs)
 
-        prev_nodes, seg_t = seg_t[:n_nodes_prev], seg_t[n_nodes_prev:]
+        # prev_nodes, seg_t = seg_t[:n_nodes_prev], seg_t[n_nodes_prev:]
         # TODO : relabels seg_t using seg_ids and prev_nodes
-
-        segmentation[t] = seg_t.reshape(shape[1:])
+        # segmentation[t] = seg_t.reshape(shape[1:])
 
     return segmentation

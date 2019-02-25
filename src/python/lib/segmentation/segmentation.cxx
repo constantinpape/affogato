@@ -136,17 +136,7 @@ PYBIND11_MODULE(_segmentation, m)
     // TODO lift gil where appropriate
     typedef segmentation::MWSGridGraph GraphType;
     py::class_<GraphType>(m, "MWSGridGraph")
-        .def(py::init<const xt::pyarray<float> &, const std::vector<std::vector<std::size_t>> &,
-                      const std::vector<std::size_t> &, const bool>(),
-             py::arg("affinities"), py::arg("offsets"),
-             py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
-             py::arg("randomize_strides")=true)
-
-        .def(py::init<const xt::pyarray<float> &, const xt::pyarray<bool> &, const std::vector<std::vector<std::size_t>> &,
-                      const std::vector<std::size_t> &, const bool>(),
-             py::arg("affinities"), py::arg("mask"), py::arg("offsets"),
-             py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
-             py::arg("randomize_strides")=true)
+        .def(py::init<const std::vector<std::size_t> &>(), py::arg("shape"))
 
         .def("uv_ids", [](const GraphType & self){
             const auto & uvs = self.uv_ids();
@@ -186,10 +176,28 @@ PYBIND11_MODULE(_segmentation, m)
             return weights;
         })
 
+        .def("set_mask", [](GraphType & self,
+                            const xt::pyarray<bool> & mask){
+            self.set_mask(mask);
+        }, py::arg("mask"))
+        .def("clear_mask", [](GraphType & self){
+            self.clear_mask();
+        })
+
+        .def("compute_weights_and_nh_from_affs", [](GraphType & self,
+                                                    const xt::pyarray<float> & affs,
+                                                    const std::vector<std::vector<int>> & offsets,
+                                                    const std::vector<std::size_t> & strides,
+                                                    const bool randomize_strides){
+            self.compute_weights_and_nh_from_affs(affs, offsets, strides, randomize_strides);
+        },py::arg("affinities"), py::arg("offsets"),
+          py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
+          py::arg("randomize_strides")=true)
+
         .def("get_causal_edges", [](const GraphType & self,
                                     const xt::pyarray<float> & affs,
                                     const xt::pyarray<uint64_t> & labels,
-                                    const std::vector<std::vector<std::size_t>> & offsets,
+                                    const std::vector<std::vector<int>> & offsets,
                                     const uint64_t id_offset){
             std::vector<std::pair<uint64_t, uint64_t>> uvs;
             std::vector<float> w;

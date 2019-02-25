@@ -13,31 +13,34 @@ namespace segmentation {
 
     public:
         typedef std::pair<uint64_t, uint64_t> EdgeType;
-        typedef std::vector<std::size_t> OffsetType;
+        typedef std::vector<int> OffsetType;
 
-        template<class AFFS>
-        MWSGridGraph(const AFFS & affs, const std::vector<OffsetType> & offsets,
-                     const std::vector<std::size_t> & strides, const bool randomize_strides) :
-        _aff_shape(affs.shape().begin(), affs.shape().end()),
-        _shape(_aff_shape.begin() + 1, _aff_shape.end()),
-        _ndim(_shape.size()) {
-            // initializers
+        MWSGridGraph(const std::vector<std::size_t> & shape): _shape(shape.begin(), shape.end()),
+                                                              _ndim(shape.size()){
             init_strides();
-            init_nn(affs, offsets);
-            init_lr(affs, offsets, strides, randomize_strides);
         }
 
-        template<class AFFS, class MASK>
-        MWSGridGraph(const AFFS & affs, const MASK & mask, const std::vector<OffsetType> & offsets,
-                     const std::vector<std::size_t> & strides, const bool randomize_strides) :
-        _aff_shape(affs.shape().begin(), affs.shape().end()),
-        _shape(_aff_shape.begin() + 1, _aff_shape.end()),
-        _ndim(_shape.size()) {
-            // initializers
-            init_strides();
+        template<class MASK>
+        inline void set_mask(const MASK & mask) {
             init_mask(mask);
+        }
+
+        inline void clear_mask() {
+            _masked_nodes.clear();
+        }
+
+        template<class AFFS>
+        inline void compute_weights_and_nh_from_affs(const AFFS & affs, const std::vector<OffsetType> & offsets,
+                                                     const std::vector<std::size_t> & strides, const bool randomize_strides) {
+            // clear
+            _uv_ids.clear();
+            _lr_uv_ids.clear();
+            _weights.clear();
+            _lr_weights.clear();
+            // compute
             init_nn(affs, offsets);
             init_lr(affs, offsets, strides, randomize_strides);
+
         }
 
         inline uint64_t get_node(const xt::xindex & coord) const {
@@ -70,7 +73,7 @@ namespace segmentation {
         void get_causal_edges(const AFFS & affs, const LABELS & labels, const std::vector<OffsetType> & offsets,
                               const uint64_t id_offset, std::vector<EdgeType> & uv_ids, std::vector<float> & weights) const {
             // get iteration shape
-            auto iter_shape = _aff_shape;
+            auto iter_shape = affs.shape();
             iter_shape[0] = offsets.size();
             xt::xindex coord(_ndim), prev_coord(_ndim);
             // iterate over the causal offsets
@@ -130,7 +133,7 @@ namespace segmentation {
         void init_strides() {
             _strides.resize(_ndim);
             _strides[_ndim - 1] = 1;
-            for(unsigned d = _ndim - 2; d >= 0; --d) {
+            for(int d = _ndim - 2; d >= 0; --d) {
                 _strides[d] = _shape[d + 1] * _strides[d + 1];
             }
         }
@@ -149,7 +152,7 @@ namespace segmentation {
         void init_nn(const AFFS & affs, const std::vector<OffsetType> & offsets) {
 
             // get neareset neighbor shape
-            auto nn_shape = _aff_shape;
+            auto nn_shape = affs.shape();
             nn_shape[0] = _ndim;
             // iterate over nearest neighbors, extract edges and weights
             xt::xindex coord(_ndim), ngb_coord(_ndim);
@@ -222,7 +225,8 @@ namespace segmentation {
         void init_lr(const AFFS & affs, const std::vector<OffsetType> & offsets) {
             // iterate over lr  neighbors, extract edges and weights
             xt::xindex coord(_ndim), ngb_coord(_ndim);
-            util::for_each_coordinate(_aff_shape, [&](const xt::xindex & aff_coord){
+            const auto & aff_shape = affs.shape();
+            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
                 // skip nn edges
                 if(aff_coord[0] < _ndim) {
@@ -280,8 +284,9 @@ namespace segmentation {
             auto draw = std::bind(distribution, generator);
 
             // iterate over lr  neighbors, extract edges and weights
+            const auto & aff_shape = affs.shape();
             xt::xindex coord(_ndim), ngb_coord(_ndim);
-            util::for_each_coordinate(_aff_shape, [&](const xt::xindex & aff_coord){
+            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
                 // skip nn edges
                 if(aff_coord[0] < _ndim) {
@@ -339,8 +344,9 @@ namespace segmentation {
                      const std::vector<std::size_t> & strides) {
 
             // iterate over lr  neighbors, extract edges and weights
+            const auto & aff_shape = affs.shape();
             xt::xindex coord(_ndim), ngb_coord(_ndim);
-            util::for_each_coordinate(_aff_shape, [&](const xt::xindex & aff_coord){
+            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
                 // skip nn edges
                 if(aff_coord[0] < _ndim) {
@@ -403,7 +409,6 @@ namespace segmentation {
 
 
     private:
-        xt::xindex _aff_shape;
         xt::xindex _shape;
         unsigned _ndim;
         xt::xindex _strides;

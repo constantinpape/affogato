@@ -1,12 +1,14 @@
 import numpy as np
 import h5py
 from cremi_tools.viewer.volumina import view
-from affogato.segmentation import causal_mws, compute_mws_segmentation
+from affogato.segmentation import compute_causal_mws, compute_mws_segmentation
 
 
 # TODO
 def run_causal_mws(affs, fg, offsets):
-    segmentation = causal_mws(affs, offsets)
+    mask = fg > .5
+    segmentation = compute_causal_mws(affs, offsets, mask)
+    return segmentation
 
 
 def merge_causal(seg, seg_prev, affs):
@@ -26,7 +28,6 @@ def merge_causal(seg, seg_prev, affs):
     # TODO
     # merge strongest mean aff if > .5
     return seg
-
 
 
 def run_default_mws_2d(affs, fg, offsets):
@@ -71,9 +72,9 @@ if __name__ == '__main__':
         ds_affs.n_threads = 8
         affs = ds_affs[(slice(None),) + (bb,)]
 
-        offsets = ds_affs.attrs['offsets']
+        offsets = ds_affs.attrs['offsets'].tolist()
 
-    # seg = run_causal_mws(bb)
-    seg = run_default_mws_2d(affs, seg, offsets)
+    seg = run_causal_mws(affs, fg, offsets)
+    # seg = run_default_mws_2d(affs, seg, offsets)
     view([raw, fg, affs.transpose((1, 2, 3, 0)), seg],
          ['raw', 'fg', 'affs', 'seg'])
