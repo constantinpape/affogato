@@ -4,10 +4,10 @@ from cremi_tools.viewer.volumina import view
 from affogato.segmentation import compute_causal_mws, compute_mws_segmentation
 
 
-# TODO
 def run_causal_mws(affs, fg, offsets):
     mask = fg > .5
-    segmentation = compute_causal_mws(affs, offsets, mask)
+    strides = [10, 10]
+    segmentation = compute_causal_mws(affs, offsets, mask, strides)
     return segmentation
 
 

@@ -137,6 +137,7 @@ PYBIND11_MODULE(_segmentation, m)
     typedef segmentation::MWSGridGraph GraphType;
     py::class_<GraphType>(m, "MWSGridGraph")
         .def(py::init<const std::vector<std::size_t> &>(), py::arg("shape"))
+        .def_property_readonly("n_nodes", &GraphType::n_nodes)
 
         .def("uv_ids", [](const GraphType & self){
             const auto & uvs = self.uv_ids();
@@ -197,11 +198,10 @@ PYBIND11_MODULE(_segmentation, m)
         .def("get_causal_edges", [](const GraphType & self,
                                     const xt::pyarray<float> & affs,
                                     const xt::pyarray<uint64_t> & labels,
-                                    const std::vector<std::vector<int>> & offsets,
-                                    const uint64_t id_offset){
+                                    const std::vector<std::vector<int>> & offsets){
             std::vector<std::pair<uint64_t, uint64_t>> uvs;
             std::vector<float> w;
-            self.get_causal_edges(affs, labels, offsets, id_offset, uvs, w);
+            self.get_causal_edges(affs, labels, offsets, uvs, w);
 
             xt::pytensor<uint64_t, 2> uv_ids = xt::zeros<uint64_t>({static_cast<int64_t>(uvs.size()), static_cast<int64_t>(2)});
             xt::pytensor<float, 1> weights = xt::zeros<float>({static_cast<int64_t>(w.size())});
@@ -213,7 +213,7 @@ PYBIND11_MODULE(_segmentation, m)
             }
 
             return std::make_pair(uv_ids, weights);
-        }, py::arg("affinities"), py::arg("labels"), py::arg("offsets"), py::arg("id_offset"))
+        }, py::arg("affinities"), py::arg("labels"), py::arg("offsets"))
     ;
 
 }

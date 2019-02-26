@@ -16,7 +16,10 @@ namespace segmentation {
         typedef std::vector<int> OffsetType;
 
         MWSGridGraph(const std::vector<std::size_t> & shape): _shape(shape.begin(), shape.end()),
-                                                              _ndim(shape.size()){
+                                                              _ndim(shape.size()),
+                                                              _n_nodes(std::accumulate(shape.begin(),
+                                                                                       shape.end(),
+                                                                                       1, std::multiplies<std::size_t>())){
             init_strides();
         }
 
@@ -67,11 +70,15 @@ namespace segmentation {
             return _lr_weights;
         }
 
+        std::size_t n_nodes() const {
+            return _n_nodes;
+        }
+
         // TODO we need to generalize this to support more than one time-step back ! than labels
         // would be 1 dim bigger than _dim
         template<class AFFS, class LABELS>
         void get_causal_edges(const AFFS & affs, const LABELS & labels, const std::vector<OffsetType> & offsets,
-                              const uint64_t id_offset, std::vector<EdgeType> & uv_ids, std::vector<float> & weights) const {
+                              std::vector<EdgeType> & uv_ids, std::vector<float> & weights) const {
             // get iteration shape
             auto iter_shape = affs.shape();
             iter_shape[0] = offsets.size();
@@ -116,11 +123,6 @@ namespace segmentation {
                     if(_masked_nodes[u]) {
                         return;
                     }
-                }
-
-                u += id_offset;
-                if(u > v) {
-                    std::swap(u, v);
                 }
 
                 uv_ids.emplace_back(u, v);
@@ -411,6 +413,7 @@ namespace segmentation {
     private:
         xt::xindex _shape;
         unsigned _ndim;
+        std::size_t _n_nodes;
         xt::xindex _strides;
         //
         std::vector<EdgeType> _uv_ids;

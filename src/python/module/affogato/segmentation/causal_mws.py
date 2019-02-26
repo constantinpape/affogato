@@ -1,4 +1,5 @@
 import numpy as np
+import vigra
 
 from .mws import compute_mws_segmentation
 from ._segmentation import compute_mws_clustering, MWSGridGraph
@@ -6,6 +7,13 @@ from ._segmentation import compute_mws_clustering, MWSGridGraph
 
 def cartesian_product(ids):
     return np.array([[x, y] for x in ids for y in ids if x < y], dtype='uint64')
+
+
+# TODO more efficient implementation
+def relabel_from_assignments(node_labels, src_ids, trgt_ids):
+    for sid, tid in zip(src_ids, trgt_ids):
+        node_labels[node_labels == sid] = tid
+    return node_labels
 
 
 # TODO support larger time window than t - 1
@@ -49,21 +57,14 @@ def compute_causal_mws(weights, offsets, mask,
     print("Run first unconstrained mws")
     seg0 = compute_mws_segmentation(weights0, spatial_offsets, nattractive_spatial, strides=strides,
                                     randomize_strides=randomize_strides, mask=mask0)
+    vigra.analysis.relabelConsecutive(seg0, out=seg0, start_label=1, keep_zeros=True)
+    id_offset = int(seg0.max()) + 1
     segmentation[0] = seg0
 
     # segment all other time steps constrained on the previous time step
     for t in range(1, n_time_steps):
         print("Run constrained mws for t", t)
-
-        # compute the region graph of the last time step, connect all regions by mutex edges
-        seg_prev = segmentation[t - 1]
-        seg_ids = np.unique(seg_prev)
-
-        if seg_ids[0] == 0:
-            seg_ids = seg_ids[1:]
-        mutex_uvs_prev = cartesian_product(seg_ids)
-        n_nodes_prev = int(mutex_uvs_prev.max()) + 1
-        mutex_costs_prev = 2 * np.ones(len(mutex_uvs_prev), dtype='float32')
+        print("current id-offset:", id_offset)
 
         # compute the spatial grid-graph of the current time-step
         weights_t = np.require(weights[spatial_channels, t], requirements='C')
@@ -71,20 +72,37 @@ def compute_causal_mws(weights, offsets, mask,
         graph = MWSGridGraph(mask_t.shape)
         graph.set_mask(mask_t)
         graph.compute_weights_and_nh_from_affs(weights_t, spatial_offsets, strides, randomize_strides)
+        print("here")
 
         # uv ids and costs (= weights for mutex watershed) from current graph
         uvs, mutex_uvs = graph.uv_ids(), graph.lr_uv_ids()
-        # offset the node ids with the number of previous nodes
-        uvs += n_nodes_prev
-        mutex_uvs += n_nodes_prev
         costs, mutex_costs = graph.weights(), graph.lr_weights()
+        n_nodes_t = graph.n_nodes
+        print("there")
+
+        # compute the region graph of the last time step, connect all regions by mutex edges
+        seg_prev = segmentation[t - 1].copy()
+        seg_ids = np.unique(seg_prev)
+        # if seg_ids[0] == 0:
+        #     seg_ids = seg_ids[1:]
+        # print("Previous segmentation ids", seg_ids)
+        # compute consecutive seg_ids
+        seg_ids_flat, _, _ = vigra.analysis.relabelConsecutive(seg_ids)
+        # offset by number of nodes in current timestep
+        seg_ids_flat += n_nodes_t
+        print("even here")
+
+        mutex_uvs_prev = cartesian_product(seg_ids_flat)
+        mutex_costs_prev = 2 * np.ones(len(mutex_uvs_prev), dtype='float32')
 
         # TODO support causal mutex edges
         # TODO support causal strides
         # connect the grid graph to region graph of the last time step
         causal_weights = np.require(weights[causal_channels, t], requirements='C')
-        causal_uvs, causal_costs = graph.get_causal_edges(causal_weights, seg_prev,
-                                                          causal_offsets, n_nodes_prev)
+        # apply proper offset to seg_prev
+        seg_prev[seg_prev != 0] += n_nodes_t
+        causal_uvs, causal_costs = graph.get_causal_edges(causal_weights, seg_prev, causal_offsets)
+        print("further")
 
         # concat all edges
         uvs = np.concatenate([uvs, causal_uvs], axis=0)
@@ -92,12 +110,30 @@ def compute_causal_mws(weights, offsets, mask,
         mutex_uvs = np.concatenate([mutex_uvs, mutex_uvs_prev], axis=0)
         mutex_costs = np.concatenate([mutex_costs, mutex_costs_prev], axis=0)
 
-        n_nodes = int(uvs.max()) + 1
-        seg_t = compute_mws_clustering(n_nodes, uvs, mutex_uvs,
-                                       costs, mutex_costs)
+        # run mws clustering
+        n_nodes = max([int(uvs.max()) + 1,
+                       int(mutex_uvs.max()) + 1])
+        print("going to cluster")
+        node_labels = compute_mws_clustering(n_nodes, uvs, mutex_uvs,
+                                             costs, mutex_costs)
+        print("clustereddd")
 
-        # prev_nodes, seg_t = seg_t[:n_nodes_prev], seg_t[n_nodes_prev:]
-        # TODO : relabels seg_t using seg_ids and prev_nodes
-        # segmentation[t] = seg_t.reshape(shape[1:])
+        # relabel the node labels consecutively, starting from id-offset
+        node_labels, id_offset, _ = vigra.analysis.relabelConsecutive(node_labels,
+                                                                      start_label=id_offset, keep_zeros=False)
+        id_offset += 1
+
+        # separate into current and previous node labels
+        node_labels, prev_node_labels = node_labels[:n_nodes_t], node_labels[n_nodes_t:]
+
+        # label all nodes which are connected to a previous node
+        # with the correct `seg_id`
+        assert len(prev_node_labels) == len(seg_ids), "%i, %i" % (len(prev_node_labels), len(seg_ids))
+        relabel_from_assignments(node_labels, prev_node_labels, seg_ids)
+
+        # reshape node_labels and set all nodes outside mask to 0
+        node_labels = node_labels.reshape(mask_t.shape)
+        node_labels[np.logical_not(mask_t)] = 0
+        segmentation[t] = node_labels
 
     return segmentation
