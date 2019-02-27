@@ -7,6 +7,8 @@ from affogato.segmentation import compute_causal_mws, compute_mws_segmentation
 def run_causal_mws(affs, fg, offsets):
     mask = fg > .5
     strides = [10, 10]
+    affs[:3] *= -1
+    affs[:3] += 1
     segmentation = compute_causal_mws(affs, offsets, mask, strides)
     return segmentation
 
@@ -61,7 +63,8 @@ def run_default_mws_2d(affs, fg, offsets):
 
 
 if __name__ == '__main__':
-    bb = np.s_[:5]
+    # NOTE t = 0 looks completely off
+    bb = np.s_[1:6]
 
     path = '/home/pape/Work/data/CTC/DIC-C2DH-HeLa/val_data.h5'
     with h5py.File(path) as f:
