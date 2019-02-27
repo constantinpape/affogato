@@ -88,7 +88,7 @@ namespace segmentation {
         int64_t slu = semantic_labeling[ru];
         int64_t slv = semantic_labeling[rv];
 
-        if (slu >= 0 && slv < 0)
+        if (slu >= 0 && slv >= 0)
             return slu != slv;
         return false;
     }
