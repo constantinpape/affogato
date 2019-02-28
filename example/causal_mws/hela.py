@@ -64,7 +64,7 @@ def run_default_mws_2d(affs, fg, offsets):
 
 if __name__ == '__main__':
     # NOTE t = 0 looks completely off
-    bb = np.s_[1:6]
+    bb = np.s_[1:10]
 
     path = '/home/pape/Work/data/CTC/DIC-C2DH-HeLa/val_data.h5'
     with h5py.File(path) as f:

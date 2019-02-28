@@ -4,9 +4,6 @@ import vigra
 from .mws import compute_mws_segmentation
 from ._segmentation import compute_mws_clustering, MWSGridGraph
 
-# for debugging
-# from cremi_tools.viewer.volumina import view
-
 
 def cartesian_product(ids):
     return np.array([[x, y] for x in ids for y in ids if x < y], dtype='uint64')
@@ -90,6 +87,13 @@ def compute_causal_mws(weights, offsets, mask,
         seg_prev = segmentation[t - 1].copy()
         seg_ids = np.unique(seg_prev)
 
+        # exclude background from ids in previous segmentation
+        if 0 in seg_ids:
+            have_ignore = True
+            seg_ids = seg_ids[1:]
+        else:
+            have_ignore = False
+
         # compute consecutive seg_ids
         seg_ids_flat, _, _ = vigra.analysis.relabelConsecutive(seg_ids)
         # offset by number of nodes in current timestep
@@ -130,6 +134,10 @@ def compute_causal_mws(weights, offsets, mask,
         # print("combined     :", n_nodes_t + len(seg_ids_flat))
         node_labels, prev_node_labels = node_labels[:n_nodes_t], node_labels[n_nodes_t:]
 
+        # if we have ignore label, it will be the first prev_node_labels id
+        # -> need to get rid of this
+        if have_ignore:
+            prev_node_labels = prev_node_labels[1:]
         # label all nodes which are connected to a previous node
         # with the correct `seg_id`
         assert len(prev_node_labels) == len(seg_ids), "%i, %i" % (len(prev_node_labels), len(seg_ids))
@@ -142,10 +150,5 @@ def compute_causal_mws(weights, offsets, mask,
         segmentation[t] = node_labels
         # compute new id offset
         id_offset = int(segmentation[:t+1].max()) + 1
-
-        # print('view seg t:', t)
-        # view([view_weights_spatial, mask, segmentation],
-        #      ['weights', 'mask', 'seg'])
-        # return
 
     return segmentation
