@@ -38,19 +38,24 @@ PYBIND11_MODULE(_segmentation, m)
     m.def("compute_mws_clustering",[](const uint64_t number_of_labels,
                                       const xt::pytensor<uint64_t, 2> & uvs,
                                       const xt::pytensor<uint64_t, 2> & mutex_uvs,
+                                      const xt::pytensor<uint64_t, 2> & semantic_uts,
                                       const xt::pytensor<float, 1> & weights,
-                                      const xt::pytensor<float, 1> & mutex_weights){
+                                      const xt::pytensor<float, 1> & mutex_weights,
+                                      const xt::pytensor<float, 1> & semantic_weights){
         xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({(int64_t) number_of_labels});
+        xt::pytensor<int64_t, 1> semantic_labeling = - xt::ones<int64_t>({(int64_t) number_of_labels});
         {
             py::gil_scoped_release allowThreads;
-            segmentation::compute_mws_clustering(number_of_labels, uvs,
-                                                 mutex_uvs, weights,
-                                                 mutex_weights, node_labeling);
+            segmentation::compute_mws_clustering(number_of_labels,
+                                                 uvs, mutex_uvs, semantic_uts,
+                                                 weights, mutex_weights, semantic_weights,
+                                                 node_labeling, semantic_labeling);
         }
-        return node_labeling;
+        py::tuple out = py::make_tuple(node_labeling, semantic_labeling);
+        return out;
     }, py::arg("number_of_labels"),
-       py::arg("uvs"), py::arg("mutex_uvs"),
-       py::arg("weights"), py::arg("mutex_weights"));
+       py::arg("uvs"), py::arg("mutex_uvs"), py::arg("semantic_uts"),
+       py::arg("weights"), py::arg("mutex_weights"), py::arg("semantic_weights"));
 
 
     m.def("compute_mws_segmentation_impl",[](const xt::pytensor<int64_t, 1> & sorted_flat_indices,
