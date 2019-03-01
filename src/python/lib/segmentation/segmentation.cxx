@@ -6,6 +6,7 @@
 #include "xtensor-python/pyarray.hpp"
 
 #include "affogato/segmentation/mutex_watershed.hxx"
+#include "affogato/segmentation/semantic_mutex_watershed.hxx"
 #include "affogato/segmentation/connected_components.hxx"
 #include "affogato/segmentation/zwatershed.hxx"
 #include "affogato/segmentation/grid_graph.hxx"
@@ -102,6 +103,58 @@ PYBIND11_MODULE(_segmentation, m)
         }
         return node_labeling;
     }, py::arg("edge_weights"),
+       py::arg("valid_edges"),
+       py::arg("offsets"),
+       py::arg("number_of_attractive_channels"),
+       py::arg("image_shape"));
+
+    m.def("compute_semantic_mws_clustering",[](const uint64_t number_of_labels,
+                                      const xt::pytensor<uint64_t, 2> & uvs,
+                                      const xt::pytensor<uint64_t, 2> & mutex_uvs,
+                                      const xt::pytensor<uint64_t, 2> & semantic_uts,
+                                      const xt::pytensor<float, 1> & weights,
+                                      const xt::pytensor<float, 1> & mutex_weights,
+                                      const xt::pytensor<float, 1> & semantic_weights){
+        xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({(int64_t) number_of_labels});
+        xt::pytensor<int64_t, 1> semantic_labeling = - xt::ones<int64_t>({(int64_t) number_of_labels});
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::compute_semantic_mws_clustering(number_of_labels,
+                                                 uvs, mutex_uvs, semantic_uts,
+                                                 weights, mutex_weights, semantic_weights,
+                                                 node_labeling, semantic_labeling);
+        }
+        py::tuple out = py::make_tuple(node_labeling, semantic_labeling);
+        return out;
+    }, py::arg("number_of_labels"),
+       py::arg("uvs"), py::arg("mutex_uvs"), py::arg("semantic_uts"),
+       py::arg("weights"), py::arg("mutex_weights"), py::arg("semantic_weights"));
+
+
+    m.def("compute_semantic_mws_segmentation_impl",[](const xt::pytensor<int64_t, 1> & sorted_flat_indices,
+                                             const xt::pytensor<bool, 1> & valid_edges,
+                                             const std::vector<std::vector<int>> & offsets,
+                                             const size_t number_of_attractive_channels,
+                                             const std::vector<int> & image_shape){
+        int64_t number_of_nodes = 1;
+        for (auto & s: image_shape){
+            number_of_nodes *= s;
+        }
+        xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({number_of_nodes});
+        xt::pytensor<int64_t, 1> semantic_labeling = - xt::ones<int64_t>({number_of_nodes});
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::compute_semantic_mws_segmentation(sorted_flat_indices,
+                                                   valid_edges,
+                                                   offsets,
+                                                   number_of_attractive_channels,
+                                                   image_shape,
+                                                   node_labeling,
+                                                   semantic_labeling);
+        }
+        py::tuple out = py::make_tuple(node_labeling, semantic_labeling);
+        return out;
+    }, py::arg("sorted_flat_indices"),
        py::arg("valid_edges"),
        py::arg("offsets"),
        py::arg("number_of_attractive_channels"),
