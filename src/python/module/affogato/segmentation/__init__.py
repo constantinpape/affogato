@@ -96,5 +96,11 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
         # increase labels by 1, so we don't merge anything with the mask
         labels += 1
         labels[inv_mask] = 0
+        _, labels = np.unique(labels, return_inverse=True)
+        labels = labels.reshape(image_shape)
+        assert np.all(labels[inv_mask] == 0)
         semantic_labels[inv_mask] = mask_label
+    # return only instances when there were no semantic weights
+    if len(offsets) >= len(weights):
+        return labels
     return labels, semantic_labels
