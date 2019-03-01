@@ -4,6 +4,7 @@ import nifty
 
 from .mws import compute_mws_segmentation
 from ..affinities import compute_affinities
+from ._segmentation import compute_mws_prim_segmentation_impl, compute_mws_segmentation_impl
 from ._segmentation import compute_mws_clustering, MWSGridGraph
 
 
