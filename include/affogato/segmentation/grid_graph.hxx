@@ -42,6 +42,7 @@ namespace segmentation {
             _lr_weights.clear();
             // compute
             init_nn(affs, offsets);
+
             init_lr(affs, offsets, strides, randomize_strides);
 
         }
@@ -130,6 +131,143 @@ namespace segmentation {
             });
         }
 
+        template<class AFFS>
+        void init_general_nn(const AFFS & affs, const std::vector<OffsetType> & offsets) {
+
+            // get neareset neighbor shape
+            auto nn_shape = affs.shape();
+            nn_shape[0] = _ndim;
+            // iterate over nearest neighbors, extract edges and weights
+            xt::xindex coord(_ndim), ngb_coord(_ndim);
+            util::for_each_coordinate(nn_shape, [&](const xt::xindex & aff_coord){
+                // set the spatial coordinates
+                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
+                ngb_coord = coord;
+
+                // set the spatial coords from the offsets
+                const auto & offset = offsets[aff_coord[0]];
+
+                // check that we are in range
+                bool out_of_range = false;
+                for(unsigned d = 0; d < _ndim; ++d) {
+                    ngb_coord[d] += offset[d];
+                    if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
+                        out_of_range = true;
+                        break;
+                    }
+                }
+                if(out_of_range) {
+                    return;
+                }
+
+                // insert the edge and weight corresponding to this grid connection
+                uint64_t u = get_node(coord);
+                uint64_t v = get_node(ngb_coord);
+
+                // if we have a mask,
+                // check if any of the nodes is masked
+                if(_masked_nodes.size()) {
+                    if(_masked_nodes[u] || _masked_nodes[v]) {
+                        return;
+                    }
+                }
+
+                if(u > v) {
+                    std::swap(u, v);
+                }
+
+                _uv_ids.emplace_back(u, v);
+                _weights.emplace_back(affs[aff_coord]);
+            });
+        }
+
+
+        template<class AFFS>
+        void init_general_lr(const AFFS & affs, const std::vector<OffsetType> & offsets,
+                     const std::vector<std::size_t> & strides, const bool randomize_strides) {
+
+            // check if we have strides
+            const std::size_t stride_product = std::accumulate(strides.begin(), strides.end(), 1,
+                                                               std::multiplies<std::size_t>());
+            const bool have_strides = stride_product > 1;
+
+            // call appropriate initializer
+            if(have_strides && randomize_strides) {
+                // compute fraction of lr edges that we keep
+                const double lr_fraction = 1. / stride_product;
+                std::cout << "2222222222" << std::endl;
+                init_general_lr(affs, offsets, lr_fraction);
+            }
+            else if(have_strides) {
+                std::logic_error("Function not yet implemented");
+            }
+            else {
+                std::logic_error("Function not yet implemented");
+            }
+        }
+
+
+        template<class AFFS>
+        void init_general_lr(const AFFS & affs, const std::vector<OffsetType> & offsets,
+                     const double lr_fraction) {
+
+            //
+            std::default_random_engine generator;
+            std::uniform_real_distribution<float> distribution;
+            auto draw = std::bind(distribution, generator);
+
+            // iterate over lr  neighbors, extract edges and weights
+            const auto & aff_shape = affs.shape();
+            xt::xindex coord(_ndim), ngb_coord(_ndim);
+            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
+
+                // draw random number to check if we keep this edge
+                if(draw() < lr_fraction) {
+                    return;
+                }
+
+                // set the spatial coords from the offsets
+                const auto & offset = offsets[aff_coord[0]];
+                
+                // set the spatial coordinates
+                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
+                ngb_coord = coord;
+
+                // check that we are in range
+                bool out_of_range = false;
+                for(unsigned d = 0; d < _ndim; ++d) {
+                    ngb_coord[d] += offset[d];
+                    if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
+                        out_of_range = true;
+                        break;
+                    }
+                }
+                if(out_of_range) {
+                    return;
+                }
+
+                // insert the edge and weight corresponding to this grid connection
+                uint64_t u = get_node(coord);
+                uint64_t v = get_node(ngb_coord);
+
+                // if we have a mask,
+                // check if any of the nodes is masked
+                if(_masked_nodes.size()) {
+                    if(_masked_nodes[u] || _masked_nodes[v]) {
+                        return;
+                    }
+                }
+
+                if(u > v) {
+                    std::swap(u, v);
+                }
+
+                _lr_uv_ids.emplace_back(u, v);
+                _lr_weights.emplace_back(affs[aff_coord]);
+            });
+        }
+
+
     private:
 
         void init_strides() {
@@ -213,12 +351,15 @@ namespace segmentation {
             if(have_strides && randomize_strides) {
                 // compute fraction of lr edges that we keep
                 const double lr_fraction = 1. / stride_product;
+                std::cout << "1111111" << std::endl;
                 init_lr(affs, offsets, lr_fraction);
             }
             else if(have_strides) {
+                std::cout << "1111120" << std::endl;
                 init_lr(affs, offsets, strides);
             }
             else {
+                std::cout << "1111130" << std::endl;
                 init_lr(affs, offsets);
             }
         }
@@ -292,6 +433,7 @@ namespace segmentation {
 
                 // skip nn edges
                 if(aff_coord[0] < _ndim) {
+                    std::cout << aff_coord[0] << " , " << aff_coord[1]  << "= aff_coord[0] < _ndim = " << _ndim << std::endl;
                     return;
                 }
 

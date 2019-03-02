@@ -267,6 +267,22 @@ PYBIND11_MODULE(_segmentation, m)
 
             return std::make_pair(uv_ids, weights);
         }, py::arg("affinities"), py::arg("labels"), py::arg("offsets"))
+
+        .def("init_general_nn", [](GraphType & self,
+                                    const xt::pyarray<float> & affs,
+                                    const std::vector<std::vector<int>> & offsets){
+            self.init_general_nn(affs, offsets);
+        },py::arg("affinities"), py::arg("offsets"))
+    
+        .def("init_general_lr", [](GraphType & self,
+                                    const xt::pyarray<float> & affs,
+                                    const std::vector<std::vector<int>> & offsets,
+                                    const std::vector<std::size_t> & strides,
+                                    const bool randomize_strides){
+            self.init_general_lr(affs, offsets, strides, randomize_strides);
+        },py::arg("affinities"), py::arg("offsets"),
+          py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
+          py::arg("randomize_strides")=true)
     ;
 
 }
