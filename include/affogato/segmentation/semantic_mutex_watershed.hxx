@@ -4,6 +4,7 @@
 #include <queue>
 #include <functional>
 #include "affogato/segmentation/mutex_watershed.hxx"
+#include "affogato/util.hxx"
 
 
 namespace affogato {
@@ -167,9 +168,10 @@ namespace segmentation {
         }
 
         // get node labeling into output
+        util::export_consecutive_labels(ufd, number_of_labels, node_labeling);
+
         for(size_t label = 0; label < number_of_labels; ++label) {
             uint64_t root = ufd.find_set(label);
-            node_labeling[label] = root;
             semantic_labeling[label] = semantic_labeling[root];
         }
     }
@@ -296,9 +298,10 @@ namespace segmentation {
         }
 
         // get node labeling into output
+        util::export_consecutive_labels(ufd, number_of_nodes, node_labeling);
+        
         for(size_t label = 0; label < number_of_nodes; ++label) {
             uint64_t root = ufd.find_set(label);
-            node_labeling[label] = root;
             semantic_labeling[label] = semantic_labeling[root];
         }
     }

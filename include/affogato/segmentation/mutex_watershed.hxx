@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/pending/disjoint_sets.hpp>
 #include "xtensor/xtensor.hpp"
+#include "affogato/util.hxx"
 #include <queue>
 #include <functional>
 
@@ -266,10 +267,8 @@ namespace segmentation {
             }
         }
 
-        // get node labeling into output
-        for(size_t label = 0; label < number_of_nodes; ++label) {
-            node_labeling[label] = ufd.find_set(label);
-        }
+        // get node labeling into output (with consecutive relabeling)
+        util::export_consecutive_labels(ufd, number_of_nodes, node_labeling);
     }
 
     // helper function for mws prim implementation:
@@ -434,10 +433,8 @@ namespace segmentation {
                            pq);
         }
 
-        // get node labeling into output
-        for(size_t label = 0; label < number_of_nodes; ++label) {
-            node_labeling[label] = node_ufd.find_set(label);
-        }
+        // get node labeling into output (with consecutive relabeling)
+        util::export_consecutive_labels(node_ufd, number_of_nodes, node_labeling);
     }
 
 }
