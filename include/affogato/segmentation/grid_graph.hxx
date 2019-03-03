@@ -195,7 +195,6 @@ namespace segmentation {
             if(have_strides && randomize_strides) {
                 // compute fraction of lr edges that we keep
                 const double lr_fraction = 1. / stride_product;
-                std::cout << "2222222222" << std::endl;
                 init_general_lr(affs, offsets, lr_fraction);
             }
             else if(have_strides) {
@@ -351,15 +350,12 @@ namespace segmentation {
             if(have_strides && randomize_strides) {
                 // compute fraction of lr edges that we keep
                 const double lr_fraction = 1. / stride_product;
-                std::cout << "1111111" << std::endl;
                 init_lr(affs, offsets, lr_fraction);
             }
             else if(have_strides) {
-                std::cout << "1111120" << std::endl;
                 init_lr(affs, offsets, strides);
             }
             else {
-                std::cout << "1111130" << std::endl;
                 init_lr(affs, offsets);
             }
         }
@@ -433,7 +429,6 @@ namespace segmentation {
 
                 // skip nn edges
                 if(aff_coord[0] < _ndim) {
-                    std::cout << aff_coord[0] << " , " << aff_coord[1]  << "= aff_coord[0] < _ndim = " << _ndim << std::endl;
                     return;
                 }
 
