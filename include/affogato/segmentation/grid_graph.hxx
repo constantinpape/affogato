@@ -218,7 +218,8 @@ namespace segmentation {
             util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
                 // draw random number to check if we keep this edge
-                if(draw() < lr_fraction) {
+                // keep edge if random number is below lr_fraction
+                if(draw() > lr_fraction) {
                     return;
                 }
 
