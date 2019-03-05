@@ -76,12 +76,13 @@ def compute_causal_mws(weights, offsets, mask,
         mask_t = np.require(mask[t], requirements='C')
         graph = MWSGridGraph(mask_t.shape)
         graph.set_mask(mask_t)
-        graph.compute_weights_and_nh_from_affs(weights_t, spatial_offsets, strides, randomize_strides)
-
-        # uv ids and costs (= weights for mutex watershed) from current graph
-        uvs, mutex_uvs = graph.uv_ids(), graph.lr_uv_ids()
-        costs, mutex_costs = graph.weights(), graph.lr_weights()
         n_nodes_t = graph.n_nodes
+
+        # compute the uvs and weights from the grid-graph
+        uvs, costs = graph.compute_nh_and_weights(weights_t[:nattractive_spatial], spatial_offsets[:nattractive_spatial])
+        mutex_uvs, mutex_costs = graph.compute_nh_and_weights(weights_t[nattractive_spatial:],
+                                                              spatial_offsets[nattractive_spatial:],
+                                                              strides, randomize_strides)
 
         # compute the region graph of the last time step, connect all regions by mutex edges
         seg_prev = segmentation[t - 1].copy()

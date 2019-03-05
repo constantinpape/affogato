@@ -192,58 +192,37 @@ PYBIND11_MODULE(_segmentation, m)
         .def(py::init<const std::vector<std::size_t> &>(), py::arg("shape"))
         .def_property_readonly("n_nodes", &GraphType::n_nodes)
 
-        .def("uv_ids", [](const GraphType & self){
-            const auto & uvs = self.uv_ids();
-            xt::pytensor<uint64_t, 2> uv_ids = xt::zeros<uint64_t>({static_cast<int64_t>(uvs.size()), static_cast<int64_t>(2)});
-            for(std::size_t e = 0; e < uvs.size(); ++e) {
-                uv_ids(e, 0) = uvs[e].first;
-                uv_ids(e, 1) = uvs[e].second;
-            }
-            return uv_ids;
-        })
-
-        .def("lr_uv_ids", [](const GraphType & self){
-            const auto & uvs = self.lr_uv_ids();
-            xt::pytensor<uint64_t, 2> uv_ids = xt::zeros<uint64_t>({static_cast<int64_t>(uvs.size()), static_cast<int64_t>(2)});
-            for(std::size_t e = 0; e < uvs.size(); ++e) {
-                uv_ids(e, 0) = uvs[e].first;
-                uv_ids(e, 1) = uvs[e].second;
-            }
-            return uv_ids;
-        })
-
-        .def("weights", [](const GraphType & self){
-            const auto & w = self.weights();
-            xt::pytensor<float, 1> weights = xt::zeros<float>({static_cast<int64_t>(w.size())});
-            for(std::size_t e = 0; e < w.size(); ++e) {
-                weights[e] = w[e];
-            }
-            return weights;
-        })
-
-        .def("lr_weights", [](const GraphType & self){
-            const auto & w = self.lr_weights();
-            xt::pytensor<float, 1> weights = xt::zeros<float>({static_cast<int64_t>(w.size())});
-            for(std::size_t e = 0; e < w.size(); ++e) {
-                weights[e] = w[e];
-            }
-            return weights;
-        })
-
         .def("set_mask", [](GraphType & self,
                             const xt::pyarray<bool> & mask){
             self.set_mask(mask);
         }, py::arg("mask"))
+
         .def("clear_mask", [](GraphType & self){
             self.clear_mask();
         })
 
-        .def("compute_weights_and_nh_from_affs", [](GraphType & self,
-                                                    const xt::pyarray<float> & affs,
-                                                    const std::vector<std::vector<int>> & offsets,
-                                                    const std::vector<std::size_t> & strides,
-                                                    const bool randomize_strides){
-            self.compute_weights_and_nh_from_affs(affs, offsets, strides, randomize_strides);
+        .def("compute_nh_and_weights", [](GraphType & self,
+                                          const xt::pyarray<float> & affs,
+                                          const std::vector<std::vector<int>> & offsets,
+                                          const std::vector<std::size_t> & strides,
+                                          const bool randomize_strides){
+
+            std::vector<std::pair<uint64_t, uint64_t>> uvs;
+            std::vector<float> w;
+            self.compute_nh_and_weights(affs, offsets, strides, randomize_strides, uvs, w);
+
+            xt::pytensor<uint64_t, 2> uv_ids = xt::zeros<uint64_t>({static_cast<int64_t>(uvs.size()), static_cast<int64_t>(2)});
+            for(std::size_t e = 0; e < uvs.size(); ++e) {
+                uv_ids(e, 0) = uvs[e].first;
+                uv_ids(e, 1) = uvs[e].second;
+            }
+
+            xt::pytensor<float, 1> weights = xt::zeros<float>({static_cast<int64_t>(w.size())});
+            for(std::size_t e = 0; e < w.size(); ++e) {
+                weights[e] = w[e];
+            }
+
+            return std::make_pair(uv_ids, weights);
         },py::arg("affinities"), py::arg("offsets"),
           py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
           py::arg("randomize_strides")=true)
