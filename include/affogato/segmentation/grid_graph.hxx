@@ -13,31 +13,56 @@ namespace segmentation {
 
     public:
         typedef std::pair<uint64_t, uint64_t> EdgeType;
-        typedef std::vector<std::size_t> OffsetType;
+        typedef std::vector<int> OffsetType;
 
-        template<class AFFS>
-        MWSGridGraph(const AFFS & affs, const std::vector<OffsetType> & offsets,
-                     const std::vector<std::size_t> & strides, const bool randomize_strides) :
-        _aff_shape(affs.shape().begin(), affs.shape().end()),
-        _shape(_aff_shape.begin() + 1, _aff_shape.end()),
-        _ndim(_shape.size()) {
-            // initializers
+        MWSGridGraph(const std::vector<std::size_t> & shape): _shape(shape.begin(), shape.end()),
+                                                              _ndim(shape.size()),
+                                                              _n_nodes(std::accumulate(shape.begin(),
+                                                                                       shape.end(),
+                                                                                       1, std::multiplies<std::size_t>())){
             init_strides();
-            init_nn(affs, offsets);
-            init_lr(affs, offsets, strides, randomize_strides);
         }
 
-        template<class AFFS, class MASK>
-        MWSGridGraph(const AFFS & affs, const MASK & mask, const std::vector<OffsetType> & offsets,
-                     const std::vector<std::size_t> & strides, const bool randomize_strides) :
-        _aff_shape(affs.shape().begin(), affs.shape().end()),
-        _shape(_aff_shape.begin() + 1, _aff_shape.end()),
-        _ndim(_shape.size()) {
-            // initializers
-            init_strides();
+        template<class MASK>
+        inline void set_mask(const MASK & mask) {
             init_mask(mask);
-            init_nn(affs, offsets);
-            init_lr(affs, offsets, strides, randomize_strides);
+        }
+
+        inline void clear_mask() {
+            _masked_nodes.clear();
+        }
+
+        // TODO implement
+        // initialize the nearest neighbor graph
+        inline void init_nn_graph() {
+
+        }
+
+        template<class AFFS>
+        inline void compute_nh_and_weights(const AFFS & affs, const std::vector<OffsetType> & offsets,
+                                           const std::vector<std::size_t> & strides, const bool randomize_strides,
+                                           std::vector<std::pair<uint64_t, uint64_t>> & uv_ids, std::vector<float> & weights) const {
+            // check if we have strides
+            const std::size_t stride_product = std::accumulate(strides.begin(), strides.end(), 1,
+                                                               std::multiplies<std::size_t>());
+            const bool have_strides = stride_product > 1;
+
+            // call appropriate initializer
+            if(have_strides && randomize_strides) {
+                // compute fraction of lr edges that we keep
+                const double lr_fraction = 1. / stride_product;
+                compute_nh_and_weights_impl(affs, offsets, lr_fraction,
+                                            uv_ids, weights);
+            }
+            else if(have_strides) {
+                compute_nh_and_weights_impl(affs, offsets, strides,
+                                            uv_ids, weights);
+            }
+            else {
+                compute_nh_and_weights_impl(affs, offsets,
+                                            uv_ids, weights);
+            }
+
         }
 
         inline uint64_t get_node(const xt::xindex & coord) const {
@@ -48,20 +73,8 @@ namespace segmentation {
             return node;
         }
 
-        const std::vector<EdgeType> & uv_ids() const {
-            return _uv_ids;
-        }
-
-        const std::vector<EdgeType> & lr_uv_ids() const {
-            return _lr_uv_ids;
-        }
-
-        const std::vector<float> & weights() const {
-            return _weights;
-        }
-
-        const std::vector<float> & lr_weights() const {
-            return _lr_weights;
+        std::size_t n_nodes() const {
+            return _n_nodes;
         }
 
         // TODO we need to generalize this to support more than one time-step back ! than labels
@@ -70,7 +83,7 @@ namespace segmentation {
         void get_causal_edges(const AFFS & affs, const LABELS & labels, const std::vector<OffsetType> & offsets,
                               std::vector<EdgeType> & uv_ids, std::vector<float> & weights) const {
             // get iteration shape
-            auto iter_shape = _aff_shape;
+            auto iter_shape = affs.shape();
             iter_shape[0] = offsets.size();
             xt::xindex coord(_ndim), prev_coord(_ndim);
             // iterate over the causal offsets
@@ -115,10 +128,6 @@ namespace segmentation {
                     }
                 }
 
-                if(u > v) {
-                    std::swap(u, v);
-                }
-
                 uv_ids.emplace_back(u, v);
                 weights.emplace_back(affs[aff_coord]);
             });
@@ -129,7 +138,7 @@ namespace segmentation {
         void init_strides() {
             _strides.resize(_ndim);
             _strides[_ndim - 1] = 1;
-            for(unsigned d = _ndim - 2; d >= 0; --d) {
+            for(int d = _ndim - 2; d >= 0; --d) {
                 _strides[d] = _shape[d + 1] * _strides[d + 1];
             }
         }
@@ -145,88 +154,12 @@ namespace segmentation {
         }
 
         template<class AFFS>
-        void init_nn(const AFFS & affs, const std::vector<OffsetType> & offsets) {
-
-            // get neareset neighbor shape
-            auto nn_shape = _aff_shape;
-            nn_shape[0] = _ndim;
-            // iterate over nearest neighbors, extract edges and weights
-            xt::xindex coord(_ndim), ngb_coord(_ndim);
-            util::for_each_coordinate(nn_shape, [&](const xt::xindex & aff_coord){
-                // set the spatial coordinates
-                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
-                ngb_coord = coord;
-
-                // set the spatial coords from the offsets
-                const auto & offset = offsets[aff_coord[0]];
-
-                // check that we are in range
-                bool out_of_range = false;
-                for(unsigned d = 0; d < _ndim; ++d) {
-                    ngb_coord[d] += offset[d];
-                    if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
-                        out_of_range = true;
-                        break;
-                    }
-                }
-                if(out_of_range) {
-                    return;
-                }
-
-                // insert the edge and weight corresponding to this grid connection
-                uint64_t u = get_node(coord);
-                uint64_t v = get_node(ngb_coord);
-
-                // if we have a mask,
-                // check if any of the nodes is masked
-                if(_masked_nodes.size()) {
-                    if(_masked_nodes[u] || _masked_nodes[v]) {
-                        return;
-                    }
-                }
-
-                if(u > v) {
-                    std::swap(u, v);
-                }
-
-                _uv_ids.emplace_back(u, v);
-                _weights.emplace_back(affs[aff_coord]);
-            });
-        }
-
-        template<class AFFS>
-        void init_lr(const AFFS & affs, const std::vector<OffsetType> & offsets,
-                     const std::vector<std::size_t> & strides, const bool randomize_strides) {
-
-            // check if we have strides
-            const std::size_t stride_product = std::accumulate(strides.begin(), strides.end(), 1,
-                                                               std::multiplies<std::size_t>());
-            const bool have_strides = stride_product > 1;
-
-            // call appropriate initializer
-            if(have_strides && randomize_strides) {
-                // compute fraction of lr edges that we keep
-                const double lr_fraction = 1. / stride_product;
-                init_lr(affs, offsets, lr_fraction);
-            }
-            else if(have_strides) {
-                init_lr(affs, offsets, strides);
-            }
-            else {
-                init_lr(affs, offsets);
-            }
-        }
-
-        template<class AFFS>
-        void init_lr(const AFFS & affs, const std::vector<OffsetType> & offsets) {
+        void compute_nh_and_weights_impl(const AFFS & affs, const std::vector<OffsetType> & offsets,
+                                         std::vector<std::pair<uint64_t, uint64_t>> & uv_ids, std::vector<float> & weights) const {
             // iterate over lr  neighbors, extract edges and weights
             xt::xindex coord(_ndim), ngb_coord(_ndim);
-            util::for_each_coordinate(_aff_shape, [&](const xt::xindex & aff_coord){
-
-                // skip nn edges
-                if(aff_coord[0] < _ndim) {
-                    return;
-                }
+            const auto & aff_shape = affs.shape();
+            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
                 // set the spatial coordinates
                 std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
@@ -264,14 +197,15 @@ namespace segmentation {
                     std::swap(u, v);
                 }
 
-                _lr_uv_ids.emplace_back(u, v);
-                _lr_weights.emplace_back(affs[aff_coord]);
+                uv_ids.emplace_back(u, v);
+                weights.emplace_back(affs[aff_coord]);
             });
         }
 
         template<class AFFS>
-        void init_lr(const AFFS & affs, const std::vector<OffsetType> & offsets,
-                     const double lr_fraction) {
+        void compute_nh_and_weights_impl(const AFFS & affs, const std::vector<OffsetType> & offsets,
+                                         const double lr_fraction, std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
+                                         std::vector<float> & weights) const {
 
             //
             std::default_random_engine generator;
@@ -279,16 +213,13 @@ namespace segmentation {
             auto draw = std::bind(distribution, generator);
 
             // iterate over lr  neighbors, extract edges and weights
+            const auto & aff_shape = affs.shape();
             xt::xindex coord(_ndim), ngb_coord(_ndim);
-            util::for_each_coordinate(_aff_shape, [&](const xt::xindex & aff_coord){
-
-                // skip nn edges
-                if(aff_coord[0] < _ndim) {
-                    return;
-                }
+            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
                 // draw random number to check if we keep this edge
-                if(draw() < lr_fraction) {
+                // keep edge if random number is below lr_fraction
+                if(draw() > lr_fraction) {
                     return;
                 }
 
@@ -328,23 +259,20 @@ namespace segmentation {
                     std::swap(u, v);
                 }
 
-                _lr_uv_ids.emplace_back(u, v);
-                _lr_weights.emplace_back(affs[aff_coord]);
+                uv_ids.emplace_back(u, v);
+                weights.emplace_back(affs[aff_coord]);
             });
         }
 
         template<class AFFS>
-        void init_lr(const AFFS & affs, const std::vector<OffsetType> & offsets,
-                     const std::vector<std::size_t> & strides) {
+        void compute_nh_and_weights_impl(const AFFS & affs, const std::vector<OffsetType> & offsets,
+                                         const std::vector<std::size_t> & strides, std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
+                                         std::vector<float> & weights) const {
 
             // iterate over lr  neighbors, extract edges and weights
+            const auto & aff_shape = affs.shape();
             xt::xindex coord(_ndim), ngb_coord(_ndim);
-            util::for_each_coordinate(_aff_shape, [&](const xt::xindex & aff_coord){
-
-                // skip nn edges
-                if(aff_coord[0] < _ndim) {
-                    return;
-                }
+            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
                 // set the spatial coordinates
                 std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
@@ -395,23 +323,20 @@ namespace segmentation {
                     std::swap(u, v);
                 }
 
-                _lr_uv_ids.emplace_back(u, v);
-                _lr_weights.emplace_back(affs[aff_coord]);
+                uv_ids.emplace_back(u, v);
+                weights.emplace_back(affs[aff_coord]);
             });
         }
 
 
     private:
-        xt::xindex _aff_shape;
         xt::xindex _shape;
         unsigned _ndim;
+        std::size_t _n_nodes;
         xt::xindex _strides;
-        //
-        std::vector<EdgeType> _uv_ids;
-        std::vector<EdgeType> _lr_uv_ids;
-        std::vector<float> _weights;
-        std::vector<float> _lr_weights;
         std::vector<bool> _masked_nodes;
+        // TODO need a datastructure for the nn graph edges
+        // std::vector<EdgeType> _uv_ids;
     };
 
 

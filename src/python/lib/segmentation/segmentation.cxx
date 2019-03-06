@@ -6,6 +6,7 @@
 #include "xtensor-python/pyarray.hpp"
 
 #include "affogato/segmentation/mutex_watershed.hxx"
+#include "affogato/segmentation/semantic_mutex_watershed.hxx"
 #include "affogato/segmentation/connected_components.hxx"
 #include "affogato/segmentation/zwatershed.hxx"
 #include "affogato/segmentation/grid_graph.hxx"
@@ -39,24 +40,19 @@ PYBIND11_MODULE(_segmentation, m)
     m.def("compute_mws_clustering",[](const uint64_t number_of_labels,
                                       const xt::pytensor<uint64_t, 2> & uvs,
                                       const xt::pytensor<uint64_t, 2> & mutex_uvs,
-                                      const xt::pytensor<uint64_t, 2> & semantic_uts,
                                       const xt::pytensor<float, 1> & weights,
-                                      const xt::pytensor<float, 1> & mutex_weights,
-                                      const xt::pytensor<float, 1> & semantic_weights){
+                                      const xt::pytensor<float, 1> & mutex_weights){
         xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({(int64_t) number_of_labels});
-        xt::pytensor<int64_t, 1> semantic_labeling = - xt::ones<int64_t>({(int64_t) number_of_labels});
         {
             py::gil_scoped_release allowThreads;
-            segmentation::compute_mws_clustering(number_of_labels,
-                                                 uvs, mutex_uvs, semantic_uts,
-                                                 weights, mutex_weights, semantic_weights,
-                                                 node_labeling, semantic_labeling);
+            segmentation::compute_mws_clustering(number_of_labels, uvs,
+                                                 mutex_uvs, weights,
+                                                 mutex_weights, node_labeling);
         }
-        py::tuple out = py::make_tuple(node_labeling, semantic_labeling);
-        return out;
+        return node_labeling;
     }, py::arg("number_of_labels"),
-       py::arg("uvs"), py::arg("mutex_uvs"), py::arg("semantic_uts"),
-       py::arg("weights"), py::arg("mutex_weights"), py::arg("semantic_weights"));
+       py::arg("uvs"), py::arg("mutex_uvs"),
+       py::arg("weights"), py::arg("mutex_weights"));
 
 
     m.def("compute_mws_segmentation_impl",[](const xt::pytensor<int64_t, 1> & sorted_flat_indices,
@@ -69,7 +65,6 @@ PYBIND11_MODULE(_segmentation, m)
             number_of_nodes *= s;
         }
         xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({number_of_nodes});
-        xt::pytensor<int64_t, 1> semantic_labeling = - xt::ones<int64_t>({number_of_nodes});
         {
             py::gil_scoped_release allowThreads;
             segmentation::compute_mws_segmentation(sorted_flat_indices,
@@ -77,11 +72,9 @@ PYBIND11_MODULE(_segmentation, m)
                                                    offsets,
                                                    number_of_attractive_channels,
                                                    image_shape,
-                                                   node_labeling,
-                                                   semantic_labeling);
+                                                   node_labeling);
         }
-        py::tuple out = py::make_tuple(node_labeling, semantic_labeling);
-        return out;
+        return node_labeling;
     }, py::arg("sorted_flat_indices"),
        py::arg("valid_edges"),
        py::arg("offsets"),
@@ -110,6 +103,58 @@ PYBIND11_MODULE(_segmentation, m)
         }
         return node_labeling;
     }, py::arg("edge_weights"),
+       py::arg("valid_edges"),
+       py::arg("offsets"),
+       py::arg("number_of_attractive_channels"),
+       py::arg("image_shape"));
+
+    m.def("compute_semantic_mws_clustering",[](const uint64_t number_of_labels,
+                                      const xt::pytensor<uint64_t, 2> & uvs,
+                                      const xt::pytensor<uint64_t, 2> & mutex_uvs,
+                                      const xt::pytensor<uint64_t, 2> & semantic_uts,
+                                      const xt::pytensor<float, 1> & weights,
+                                      const xt::pytensor<float, 1> & mutex_weights,
+                                      const xt::pytensor<float, 1> & semantic_weights){
+        xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({(int64_t) number_of_labels});
+        xt::pytensor<int64_t, 1> semantic_labeling = - xt::ones<int64_t>({(int64_t) number_of_labels});
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::compute_semantic_mws_clustering(number_of_labels,
+                                                 uvs, mutex_uvs, semantic_uts,
+                                                 weights, mutex_weights, semantic_weights,
+                                                 node_labeling, semantic_labeling);
+        }
+        py::tuple out = py::make_tuple(node_labeling, semantic_labeling);
+        return out;
+    }, py::arg("number_of_labels"),
+       py::arg("uvs"), py::arg("mutex_uvs"), py::arg("semantic_uts"),
+       py::arg("weights"), py::arg("mutex_weights"), py::arg("semantic_weights"));
+
+
+    m.def("compute_semantic_mws_segmentation_impl",[](const xt::pytensor<int64_t, 1> & sorted_flat_indices,
+                                             const xt::pytensor<bool, 1> & valid_edges,
+                                             const std::vector<std::vector<int>> & offsets,
+                                             const size_t number_of_attractive_channels,
+                                             const std::vector<int> & image_shape){
+        int64_t number_of_nodes = 1;
+        for (auto & s: image_shape){
+            number_of_nodes *= s;
+        }
+        xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({number_of_nodes});
+        xt::pytensor<int64_t, 1> semantic_labeling = - xt::ones<int64_t>({number_of_nodes});
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::compute_semantic_mws_segmentation(sorted_flat_indices,
+                                                   valid_edges,
+                                                   offsets,
+                                                   number_of_attractive_channels,
+                                                   image_shape,
+                                                   node_labeling,
+                                                   semantic_labeling);
+        }
+        py::tuple out = py::make_tuple(node_labeling, semantic_labeling);
+        return out;
+    }, py::arg("sorted_flat_indices"),
        py::arg("valid_edges"),
        py::arg("offsets"),
        py::arg("number_of_attractive_channels"),
@@ -144,60 +189,48 @@ PYBIND11_MODULE(_segmentation, m)
     // TODO lift gil where appropriate
     typedef segmentation::MWSGridGraph GraphType;
     py::class_<GraphType>(m, "MWSGridGraph")
-        .def(py::init<const xt::pyarray<float> &, const std::vector<std::vector<std::size_t>> &,
-                      const std::vector<std::size_t> &, const bool>(),
-             py::arg("affinities"), py::arg("offsets"),
-             py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
-             py::arg("randomize_strides")=true)
+        .def(py::init<const std::vector<std::size_t> &>(), py::arg("shape"))
+        .def_property_readonly("n_nodes", &GraphType::n_nodes)
 
-        .def(py::init<const xt::pyarray<float> &, const xt::pyarray<bool> &, const std::vector<std::vector<std::size_t>> &,
-                      const std::vector<std::size_t> &, const bool>(),
-             py::arg("affinities"), py::arg("mask"), py::arg("offsets"),
-             py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
-             py::arg("randomize_strides")=true)
+        .def("set_mask", [](GraphType & self,
+                            const xt::pyarray<bool> & mask){
+            self.set_mask(mask);
+        }, py::arg("mask"))
 
-        .def("uv_ids", [](const GraphType & self){
-            const auto & uvs = self.uv_ids();
+        .def("clear_mask", [](GraphType & self){
+            self.clear_mask();
+        })
+
+        .def("compute_nh_and_weights", [](GraphType & self,
+                                          const xt::pyarray<float> & affs,
+                                          const std::vector<std::vector<int>> & offsets,
+                                          const std::vector<std::size_t> & strides,
+                                          const bool randomize_strides){
+
+            std::vector<std::pair<uint64_t, uint64_t>> uvs;
+            std::vector<float> w;
+            self.compute_nh_and_weights(affs, offsets, strides, randomize_strides, uvs, w);
+
             xt::pytensor<uint64_t, 2> uv_ids = xt::zeros<uint64_t>({static_cast<int64_t>(uvs.size()), static_cast<int64_t>(2)});
             for(std::size_t e = 0; e < uvs.size(); ++e) {
                 uv_ids(e, 0) = uvs[e].first;
                 uv_ids(e, 1) = uvs[e].second;
             }
-            return uv_ids;
-        })
 
-        .def("lr_uv_ids", [](const GraphType & self){
-            const auto & uvs = self.lr_uv_ids();
-            xt::pytensor<uint64_t, 2> uv_ids = xt::zeros<uint64_t>({static_cast<int64_t>(uvs.size()), static_cast<int64_t>(2)});
-            for(std::size_t e = 0; e < uvs.size(); ++e) {
-                uv_ids(e, 0) = uvs[e].first;
-                uv_ids(e, 1) = uvs[e].second;
-            }
-            return uv_ids;
-        })
-
-        .def("weights", [](const GraphType & self){
-            const auto & w = self.weights();
             xt::pytensor<float, 1> weights = xt::zeros<float>({static_cast<int64_t>(w.size())});
             for(std::size_t e = 0; e < w.size(); ++e) {
                 weights[e] = w[e];
             }
-            return weights;
-        })
 
-        .def("lr_weights", [](const GraphType & self){
-            const auto & w = self.lr_weights();
-            xt::pytensor<float, 1> weights = xt::zeros<float>({static_cast<int64_t>(w.size())});
-            for(std::size_t e = 0; e < w.size(); ++e) {
-                weights[e] = w[e];
-            }
-            return weights;
-        })
+            return std::make_pair(uv_ids, weights);
+        },py::arg("affinities"), py::arg("offsets"),
+          py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
+          py::arg("randomize_strides")=true)
 
         .def("get_causal_edges", [](const GraphType & self,
                                     const xt::pyarray<float> & affs,
                                     const xt::pyarray<uint64_t> & labels,
-                                    const std::vector<std::vector<std::size_t>> & offsets){
+                                    const std::vector<std::vector<int>> & offsets){
             std::vector<std::pair<uint64_t, uint64_t>> uvs;
             std::vector<float> w;
             self.get_causal_edges(affs, labels, offsets, uvs, w);
@@ -212,7 +245,7 @@ PYBIND11_MODULE(_segmentation, m)
             }
 
             return std::make_pair(uv_ids, weights);
-        })
+        }, py::arg("affinities"), py::arg("labels"), py::arg("offsets"))
     ;
 
 }
