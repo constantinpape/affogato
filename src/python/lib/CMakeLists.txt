@@ -95,5 +95,5 @@ addPythonModule(
 
 
 add_subdirectory(affinities)
-add_subdirectory(learning)
+# add_subdirectory(learning)
 add_subdirectory(segmentation)
