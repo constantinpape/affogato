@@ -82,15 +82,39 @@ namespace segmentation {
             return node;
         }
 
+        inline uint64_t get_node(const std::vector<int64_t> & coord) const {
+            uint64_t node = 0;
+            for(unsigned d = 0; d < _ndim; ++d) {
+                node += coord[d] * _strides[d];
+            }
+            return node;
+        }
+
+        inline std::vector<int64_t> get_coordinate(const uint64_t node) const {
+            std::vector<int64_t> coord(_ndim);
+            uint64_t index = node;
+            for(auto d = 0; d < _ndim; ++d) {
+                coord[d] = index / _strides[d];
+                index -= coord[d] * _strides[d];
+            }
+            return coord;
+        }
+
         std::size_t n_nodes() const {
             return _n_nodes;
+        }
+
+        unsigned ndim() const {
+            return _ndim;
         }
 
         // TODO we need to generalize this to support more than one time-step back ! than labels
         // would be 1 dim bigger than _dim
         template<class AFFS, class LABELS>
-        void get_causal_edges(const AFFS & affs, const LABELS & labels, const std::vector<OffsetType> & offsets,
-                              std::vector<EdgeType> & uv_ids, std::vector<float> & weights) const {
+        void get_causal_edges(const AFFS & affs, const LABELS & labels,
+                              const std::vector<OffsetType> & offsets,
+                              std::vector<EdgeType> & uv_ids,
+                              std::vector<float> & weights) const {
             // get iteration shape
             auto iter_shape = affs.shape();
             iter_shape[0] = offsets.size();

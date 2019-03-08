@@ -210,7 +210,45 @@ PYBIND11_MODULE(_segmentation, m)
             self.clear_seeds();
         })
 
-        .def("compute_nh_and_weights", [](GraphType & self,
+        .def("get_node", [](const GraphType & self, const std::vector<int64_t> & coordinate){
+            return self.get_node(coordinate);
+        }, py::arg("coordinate"))
+
+        .def("get_nodes", [](const GraphType & self,
+                             const xt::pytensor<int64_t, 2> & coordinates){
+            const auto & shape = coordinates.shape();
+            xt::pytensor<uint64_t, 1>  nodes = xt::zeros<uint64_t>({shape[0]});
+            xt::xindex coord(shape[1]);
+            for(std::size_t ii = 0; ii < shape[0]; ++ii) {
+                for(unsigned d = 0; d < shape[1]; ++d) {
+                    coord[d] = coordinates(ii, d);
+                }
+                nodes(ii) = self.get_node(coord);
+            }
+            return nodes;
+        }, py::arg("coordinates"))
+
+        .def("get_coordinate", [](const GraphType & self, const uint64_t node){
+            return self.get_coordinate(node);
+        }, py::arg("node"))
+
+        .def("get_coordinates", [](const GraphType & self,
+                                   const xt::pytensor<uint64_t, 1> & nodes){
+            const auto & shape = nodes.shape();
+            const unsigned ndim = self.ndim();
+            xt::pytensor<int64_t, 2> coordinates = xt::zeros<int64_t>({shape[0], static_cast<int64_t>(ndim)});
+
+            for(std::size_t ii = 0; ii < shape[0]; ++ii) {
+                const auto coord = self.get_coordinate(nodes(ii));
+                for(unsigned d = 0; d < ndim; ++d) {
+                    coordinates(ii, d) = coord[d];
+                }
+            }
+
+            return coordinates;
+        }, py::arg("nodes"))
+
+        .def("compute_nh_and_weights", [](const GraphType & self,
                                           const xt::pyarray<float> & affs,
                                           const std::vector<std::vector<int>> & offsets,
                                           const std::vector<std::size_t> & strides,
