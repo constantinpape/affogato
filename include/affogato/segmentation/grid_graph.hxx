@@ -59,8 +59,8 @@ namespace segmentation {
             // call appropriate initializer
             if(have_strides && randomize_strides) {
                 // compute fraction of lr edges that we keep
-                const double lr_fraction = 1. / stride_product;
-                compute_nh_and_weights_impl(affs, offsets, lr_fraction,
+                const double fraction = 1. / stride_product;
+                compute_nh_and_weights_impl(affs, offsets, fraction,
                                             uv_ids, weights);
             }
             else if(have_strides) {
@@ -264,8 +264,8 @@ namespace segmentation {
             const auto & aff_shape = affs.shape();
             util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
-                // draw random number to check if we keep this edge
-                if(draw() < fraction) {
+                // keep edge if random number is below fraction
+                if(draw() > fraction) {
                     return;
                 }
 
