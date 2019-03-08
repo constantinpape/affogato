@@ -201,6 +201,15 @@ PYBIND11_MODULE(_segmentation, m)
             self.clear_mask();
         })
 
+        .def("set_seeds", [](GraphType & self,
+                            const xt::pyarray<bool> & seeds){
+            self.set_seeds(seeds);
+        }, py::arg("seeds"))
+
+        .def("clear_seeds", [](GraphType & self){
+            self.clear_seeds();
+        })
+
         .def("compute_nh_and_weights", [](GraphType & self,
                                           const xt::pyarray<float> & affs,
                                           const std::vector<std::vector<int>> & offsets,

@@ -32,6 +32,15 @@ namespace segmentation {
             _masked_nodes.clear();
         }
 
+        template<class SEEDS>
+        inline void set_seeds(const SEEDS & seeds) {
+            init_seeds(seeds);
+        }
+
+        inline void clear_seeds() {
+            _seeded_nodes.clear();
+        }
+
         // TODO implement
         // initialize the nearest neighbor graph
         inline void init_nn_graph() {
@@ -145,66 +154,105 @@ namespace segmentation {
 
         template<class MASK>
         void init_mask(const MASK & mask) {
-            const std::size_t n_nodes = std::accumulate(_shape.begin(), _shape.end(),
-                                                        1, std::multiplies<std::size_t>());
-            _masked_nodes.resize(n_nodes);
+            _masked_nodes.resize(_n_nodes);
             util::for_each_coordinate(_shape, [&](const xt::xindex & coord){
                 _masked_nodes[get_node(coord)] = mask[coord] == 0;
             });
         }
 
+        template<class SEEDS>
+        void init_seeds(const SEEDS & seeds) {
+            _seeded_nodes.resize(_n_nodes);
+            util::for_each_coordinate(_shape, [&](const xt::xindex & coord){
+                const uint64_t seed_id = seeds[coord];
+                if(seed_id == 0) {
+                    return;
+                }
+                if(seed_id < _n_nodes) {
+                    throw std::runtime_error("Seeds need to have offset");
+                }
+                _seeded_nodes[get_node(coord)] = seed_id;
+            });
+        }
+
+
+        template<class AFFS>
+        inline void insertEdge(const AFFS & affs, const xt::xindex & aff_coord, const OffsetType & offset,
+                               std::vector<std::pair<uint64_t, uint64_t>> & uv_ids, std::vector<float> & weights) const{
+            // initialize the spatial coordinates
+            xt::xindex coord(_ndim);
+            std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
+            xt::xindex ngb_coord = coord;
+
+            // update the ngb-coord and check that we are in range
+            for(unsigned d = 0; d < _ndim; ++d) {
+                ngb_coord[d] += offset[d];
+                if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
+                    return;
+                }
+            }
+
+            uint64_t u = get_node(coord);
+            uint64_t v = get_node(ngb_coord);
+
+            // if we have a mask,
+            // check if any of the nodes is masked
+            if(_masked_nodes.size()) {
+                if(_masked_nodes[u] || _masked_nodes[v]) {
+                    return;
+                }
+            }
+
+            // if we have seeds, check if any of the nodes
+            // is seeded
+            bool haveSeed = false;
+            if(_seeded_nodes.size()) {
+                if(_seeded_nodes[u]) {
+                    haveSeed = true;
+                    u = _seeded_nodes[u];
+                }
+                if(_seeded_nodes[v]) {
+                    haveSeed = true;
+                    v = _seeded_nodes[v];
+                }
+            }
+
+            if(u > v) {
+                std::swap(u, v);
+            }
+
+            // if we have a seed, we need to check if we had this edge already
+            if(haveSeed) {
+                auto uv = std::make_pair(u, v);
+                auto uv_it = std::find(uv_ids.begin(), uv_ids.end(), uv);
+                // we had this edge already -> update edge strength and skip
+                if(uv_it != uv_ids.end()) {
+                    const std::size_t edgeId = std::distance(uv_ids.begin(), uv_it);
+                    weights[edgeId] = std::max(affs[aff_coord], weights[edgeId]);
+                    return;
+                }
+            }
+            uv_ids.emplace_back(u, v);
+            weights.emplace_back(affs[aff_coord]);
+        }
+
+
         template<class AFFS>
         void compute_nh_and_weights_impl(const AFFS & affs, const std::vector<OffsetType> & offsets,
                                          std::vector<std::pair<uint64_t, uint64_t>> & uv_ids, std::vector<float> & weights) const {
-            // iterate over lr  neighbors, extract edges and weights
-            xt::xindex coord(_ndim), ngb_coord(_ndim);
             const auto & aff_shape = affs.shape();
+            // iterate over  neighbors, extract edges and weights
             util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
-
-                // set the spatial coordinates
-                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
-                ngb_coord = coord;
-
-                // set the spatial coords from the offsets
+                // set the ngb coord from the offsets
                 const auto & offset = offsets[aff_coord[0]];
-
-                // check that we are in range
-                bool out_of_range = false;
-                for(unsigned d = 0; d < _ndim; ++d) {
-                    ngb_coord[d] += offset[d];
-                    if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
-                        out_of_range = true;
-                        break;
-                    }
-                }
-                if(out_of_range) {
-                    return;
-                }
-
                 // insert the edge and weight corresponding to this grid connection
-                uint64_t u = get_node(coord);
-                uint64_t v = get_node(ngb_coord);
-
-                // if we have a mask,
-                // check if any of the nodes is masked
-                if(_masked_nodes.size()) {
-                    if(_masked_nodes[u] || _masked_nodes[v]) {
-                        return;
-                    }
-                }
-
-                if(u > v) {
-                    std::swap(u, v);
-                }
-
-                uv_ids.emplace_back(u, v);
-                weights.emplace_back(affs[aff_coord]);
+                insertEdge(affs, aff_coord, offset, uv_ids, weights);
             });
         }
 
         template<class AFFS>
         void compute_nh_and_weights_impl(const AFFS & affs, const std::vector<OffsetType> & offsets,
-                                         const double lr_fraction, std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
+                                         const double fraction, std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
                                          std::vector<float> & weights) const {
 
             //
@@ -214,52 +262,17 @@ namespace segmentation {
 
             // iterate over lr  neighbors, extract edges and weights
             const auto & aff_shape = affs.shape();
-            xt::xindex coord(_ndim), ngb_coord(_ndim);
             util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
                 // draw random number to check if we keep this edge
-                if(draw() < lr_fraction) {
+                if(draw() < fraction) {
                     return;
                 }
 
-                // set the spatial coordinates
-                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
-                ngb_coord = coord;
-
-                // set the spatial coords from the offsets
+                // set the ngb coord from the offsets
                 const auto & offset = offsets[aff_coord[0]];
-
-                // check that we are in range
-                bool out_of_range = false;
-                for(unsigned d = 0; d < _ndim; ++d) {
-                    ngb_coord[d] += offset[d];
-                    if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
-                        out_of_range = true;
-                        break;
-                    }
-                }
-                if(out_of_range) {
-                    return;
-                }
-
                 // insert the edge and weight corresponding to this grid connection
-                uint64_t u = get_node(coord);
-                uint64_t v = get_node(ngb_coord);
-
-                // if we have a mask,
-                // check if any of the nodes is masked
-                if(_masked_nodes.size()) {
-                    if(_masked_nodes[u] || _masked_nodes[v]) {
-                        return;
-                    }
-                }
-
-                if(u > v) {
-                    std::swap(u, v);
-                }
-
-                uv_ids.emplace_back(u, v);
-                weights.emplace_back(affs[aff_coord]);
+                insertEdge(affs, aff_coord, offset, uv_ids, weights);
             });
         }
 
@@ -273,57 +286,16 @@ namespace segmentation {
             xt::xindex coord(_ndim), ngb_coord(_ndim);
             util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
-                // set the spatial coordinates
-                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
-                ngb_coord = coord;
-
-                bool valid_stride = true;
-                for(unsigned d = 0; d < _ndim; ++d) {
-                    if(coord[d] % strides[d] != 0) {
-                        valid_stride = false;
-                        break;
-                    }
-                }
-
-                // check if we keep this stride
-                if(!valid_stride) {
-                    return;
-                }
-
-                // set the spatial coords from the offsets
-                const auto & offset = offsets[aff_coord[0]];
-
-                // check that we are in range
-                bool out_of_range = false;
-                for(unsigned d = 0; d < _ndim; ++d) {
-                    ngb_coord[d] += offset[d];
-                    if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
-                        out_of_range = true;
-                        break;
-                    }
-                }
-                if(out_of_range) {
-                    return;
-                }
-
-                // insert the edge and weight corresponding to this grid connection
-                uint64_t u = get_node(coord);
-                uint64_t v = get_node(ngb_coord);
-
-                // if we have a mask,
-                // check if any of the nodes is masked
-                if(_masked_nodes.size()) {
-                    if(_masked_nodes[u] || _masked_nodes[v]) {
+                for(unsigned d = 1; d < _ndim + 1; ++d) {
+                    if(aff_coord[d] % strides[d - 1] != 0) {
                         return;
                     }
                 }
 
-                if(u > v) {
-                    std::swap(u, v);
-                }
-
-                uv_ids.emplace_back(u, v);
-                weights.emplace_back(affs[aff_coord]);
+                // set the ngb coord from the offsets
+                const auto & offset = offsets[aff_coord[0]];
+                // insert the edge and weight corresponding to this grid connection
+                insertEdge(affs, aff_coord, offset, uv_ids, weights);
             });
         }
 
@@ -334,6 +306,7 @@ namespace segmentation {
         std::size_t _n_nodes;
         xt::xindex _strides;
         std::vector<bool> _masked_nodes;
+        std::vector<uint64_t> _seeded_nodes;
         // TODO need a datastructure for the nn graph edges
         // std::vector<EdgeType> _uv_ids;
     };
