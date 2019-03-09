@@ -18,7 +18,11 @@ namespace segmentation {
         typedef std::unordered_map<std::pair<uint64_t, uint64_t>,
                                    std::size_t,
                                    boost::hash<std::pair<uint64_t, uint64_t>>
-                                  > SeedHelper;
+                                  > SeedHelperType;
+        typedef std::unordered_map<std::pair<uint64_t, uint64_t>,
+                                   float,
+                                   boost::hash<std::pair<uint64_t, uint64_t>>
+                                  > SeedStateType;
 
         MWSGridGraph(const std::vector<std::size_t> & shape): _shape(shape.begin(), shape.end()),
                                                               _ndim(shape.size()),
@@ -29,6 +33,16 @@ namespace segmentation {
             init_strides();
         }
 
+        // TODO implement
+        // initialize the nearest neighbor graph
+        inline void init_nn_graph() {
+
+        }
+
+        //
+        // mask functionality
+        //
+
         template<class MASK>
         inline void set_mask(const MASK & mask) {
             init_mask(mask);
@@ -36,7 +50,12 @@ namespace segmentation {
 
         inline void clear_mask() {
             _masked_nodes.clear();
+            _seed_lut.clear();
         }
+
+        //
+        // seed functionality
+        //
 
         template<class SEEDS>
         inline void set_seeds(const SEEDS & seeds) {
@@ -55,10 +74,101 @@ namespace segmentation {
             _intra_seed_weight = weight;
         }
 
-        // TODO implement
-        // initialize the nearest neighbor graph
-        inline void init_nn_graph() {
+        template<class SEED_EDGES, class SEED_WEIGHTS>
+        inline void set_seed_state(const SEED_EDGES & seed_edges, const SEED_WEIGHTS & seed_weights) {
 
+            // TODO assert that we actually have seeds
+
+            // iterate over the seed edges and copy the seed state
+            for(std::size_t edge_id = 0; edge_id < seed_edges.shape()[0]; ++edge_id) {
+
+                // we need to get the seed representatives
+                uint64_t u = _seed_lut.at(seed_edges(edge_id, 0));
+                uint64_t v = _seed_lut.at(seed_edges(edge_id, 1));
+                if(u > v) {
+                    std::swap(u, v);
+                }
+                const auto uv = std::make_pair(u, v);
+                _seed_state.emplace(uv, seed_weights(edge_id));
+            }
+        }
+
+        inline void clear_seed_state() {
+            _seed_state.clear();
+        }
+
+        //
+        //
+        //
+
+        // STATE = std::unordered_map<std::pair<uint64_t, uint64_t>, std::pair<float, bool>>
+        // + boost hash function for pair
+        template<class AFFS, class SEG, class STATE>
+        inline void compute_state_for_segmentation(const AFFS & affs, const SEG & seg,
+                                                   const std::vector<OffsetType> & offsets,
+                                                   const unsigned n_attactive_channels,
+                                                   const bool ignore_label,
+                                                   STATE & state) const {
+
+            typedef typename SEG::value_type SegType;
+
+            const auto & aff_shape = affs.shape();
+            xt::xindex coord(_ndim), ngb_coord(_ndim);
+            // Iterate over the affinities and extract the segmentation state
+            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord) {
+
+                // get the spatial coords
+                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
+                ngb_coord = coord;
+
+                // update the ngb-coord and check that we are in range
+                const auto & offset = offsets[aff_coord[0]];
+                for(unsigned d = 0; d < _ndim; ++d) {
+                    ngb_coord[d] += offset[d];
+                    if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
+                        return;
+                    }
+                }
+
+                // get the seg ids
+                SegType u = seg[coord];
+                SegType v = seg[coord];
+
+                // skip if we have an ignore label
+                if((u == 0 || v == 0) && ignore_label) {
+                    return;
+                }
+
+                // TODO should we also skip masked nodes here ?
+                // if(_masked_nodes.size()) {
+                //  if(_maksed_nodes[u] || _masked_nodes[v]) {
+                //    return;
+                //   }
+                // }
+
+                if(u > v) {
+                    std::swap(u, v);
+                }
+
+                const auto uv = std::make_pair(u, v);
+                const auto edge_it = state.find(uv);
+
+                const bool is_attractive = aff_coord[0] < n_attactive_channels;
+                const float weight = affs[aff_coord];
+
+                // check if we had this edge already
+                if(edge_it != state.end()) { // yes -> update the edge state
+                    // TODO support other update than max
+                    auto & edge_state = edge_it->second;
+                    if(weight > edge_state.first) {
+                        edge_state.first = weight;
+                        edge_state.second = is_attractive;
+                    }
+                }
+                else { // no -> insert new edge state
+                    state.emplace(uv, std::make_pair(weight, is_attractive));
+                }
+            });
         }
 
         template<class AFFS>
@@ -120,6 +230,23 @@ namespace segmentation {
 
         unsigned ndim() const {
             return _ndim;
+        }
+
+        std::size_t n_seeds() const {
+            return _seed_lut.size();
+        }
+
+        template<class NODE_LABELS, class SEED_ASSIGNMENTS>
+        inline void get_seed_assignments_from_node_labels(const NODE_LABELS & node_labels,
+                                                          SEED_ASSIGNMENTS & seed_assignments) const {
+            std::size_t seed_index = 0;
+            for(const auto & seed_it : _seed_lut) {
+                const uint64_t seed_id = seed_it.first;
+                const uint64_t representative_node = seed_it.second;
+                seed_assignments(seed_index, 0) = seed_id;
+                seed_assignments(seed_index, 1) = node_labels(representative_node);
+                ++seed_index;
+            }
         }
 
         // TODO we need to generalize this to support more than one time-step back ! than labels
@@ -200,14 +327,10 @@ namespace segmentation {
 
         template<class SEEDS>
         void init_seeds(const SEEDS & seeds) {
-            typedef typename SEEDS::value_type SeedType;
             _seeded_nodes.resize(_n_nodes);
 
-            // look-up-table for seed-id -> representative pixel
-            std::unordered_map<SeedType, uint64_t> seed_lut;
-
             util::for_each_coordinate(_shape, [&](const xt::xindex & coord){
-                const SeedType seed_id = seeds[coord];
+                const uint64_t seed_id = seeds[coord];
 
                 // 0 means un-seeded
                 if(seed_id == 0) {
@@ -216,15 +339,18 @@ namespace segmentation {
 
                 const uint64_t this_node = get_node(coord);
                 uint64_t representative_node;
+
                 // check if this seed is already in the lut
-                auto seed_it = seed_lut.find(seed_id);
-                // not in the lut -> make entry with this node id
-                if(seed_it == seed_lut.end()) {
-                    seed_lut.emplace(seed_id, this_node);
+                auto seed_it = _seed_lut.find(seed_id);
+                if(seed_it == _seed_lut.end()) { // no -> make entry in the lut with this node as repr
+                    _seed_lut.emplace(seed_id, this_node);
                     representative_node = this_node;
-                } else { // already in the lut -> get represetnative
+                }
+                else { // yes -> get representative node
                     representative_node = seed_it->second;
                 }
+
+                // set this node to the representative node
                 _seeded_nodes[this_node] = representative_node;
             });
         }
@@ -267,7 +393,7 @@ namespace segmentation {
         template<class AFFS>
         inline void insertEdgeWithSeeds(const AFFS & affs, const xt::xindex & aff_coord, const OffsetType & offset,
                                         std::vector<std::pair<uint64_t, uint64_t>> & uv_ids, std::vector<float> & weights,
-                                        SeedHelper & seed_helper) const{
+                                        SeedHelperType & seed_helper) const{
             // initialize the spatial coordinates
             xt::xindex coord(_ndim);
             std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
@@ -321,23 +447,36 @@ namespace segmentation {
                 std::swap(u, v);
             }
 
+            float weight = affs[aff_coord];
             // if we have a seed, we need to check if we had this edge already
             if(have_seed) {
                 auto uv = std::make_pair(u, v);
                 auto uv_it = seed_helper.find(uv);
-                // we had this edge already -> update edge strength and skip
-                if(uv_it != seed_helper.end()) {
+
+                // check if we have seen this edge already
+                if(uv_it != seed_helper.end()) { // yes -> update the edge weight
                     const std::size_t edgeId = uv_it->second;
-                    // TODO enale other accumulation then max
+                    // TODO enale other update than max
                     weights[edgeId] = std::max(affs[aff_coord], weights[edgeId]);
                     return;
-                } else {
+                }
+                else { // no -> insert new edge
                     const std::size_t edgeId = uv_ids.size();
-                    seed_helper.emplace(std::make_pair(u, v), edgeId);
+                    seed_helper.emplace(uv, edgeId);
+
+                    // if we have seed state, check if this edge is part of it
+                    if(_seed_state.size()) {
+                        auto state_it = _seed_state.find(uv);
+                        // if this edge is in the state, update the weight
+                        if(state_it != _seed_state.end()) {
+                            // TODO enale other update than max
+                            weight = std::max(weight, state_it->second);
+                        }
+                    }
                 }
             }
             uv_ids.emplace_back(u, v);
-            weights.emplace_back(affs[aff_coord]);
+            weights.emplace_back(weight);
         }
 
 
@@ -348,7 +487,7 @@ namespace segmentation {
 
             // iterate over coords, extract edges and weights
             if(_seeded_nodes.size()) {  // with seeds
-                SeedHelper seed_helper;
+                SeedHelperType seed_helper;
                 util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
                     // set the ngb coord from the offsets
                     const auto & offset = offsets[aff_coord[0]];
@@ -379,7 +518,7 @@ namespace segmentation {
 
             // iterate over coords, extract edges and weights
             if(_seeded_nodes.size()) {  // with seeds
-                SeedHelper seed_helper;
+                SeedHelperType seed_helper;
                 util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
                     // keep edge if random number is below fraction
                     if(draw() > fraction) {
@@ -413,7 +552,7 @@ namespace segmentation {
 
             // iterate over coords, extract edges and weights
             if(_seeded_nodes.size()) { // with seeds
-                SeedHelper seed_helper;
+                SeedHelperType seed_helper;
                 util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
                     // check if this coordinate is in the strides
                     for(unsigned d = 1; d < _ndim + 1; ++d) {
@@ -450,8 +589,17 @@ namespace segmentation {
         std::size_t _n_nodes;
         float _intra_seed_weight;
         xt::xindex _strides;
+
+        // data structures for masks
         std::vector<bool> _masked_nodes;
+
+        // data structures for seeds
         std::vector<uint64_t> _seeded_nodes;
+        // look-up-table for seed-id -> representative pixel
+        std::unordered_map<uint64_t, uint64_t> _seed_lut;
+        // storage for initial seed edge weights
+        SeedStateType _seed_state;
+
         // TODO need a datastructure for the nn graph edges
         // std::vector<EdgeType> _uv_ids;
     };

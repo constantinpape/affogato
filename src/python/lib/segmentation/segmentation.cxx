@@ -193,23 +193,36 @@ PYBIND11_MODULE(_segmentation, m)
         .def_property_readonly("n_nodes", &GraphType::n_nodes)
         .def_property("intra_seed_weight", &GraphType::get_intra_seed_weight, &GraphType::set_intra_seed_weight)
 
+        //
+        // mask functionality
+        //
+
         .def("set_mask", [](GraphType & self,
                             const xt::pyarray<bool> & mask){
             self.set_mask(mask);
         }, py::arg("mask"))
+        .def("clear_mask", &GraphType::clear_mask)
 
-        .def("clear_mask", [](GraphType & self){
-            self.clear_mask();
-        })
+        //
+        // seed functionality
+        //
 
         .def("set_seeds", [](GraphType & self,
                             const xt::pyarray<uint64_t> & seeds){
             self.set_seeds(seeds);
         }, py::arg("seeds"))
+        .def("clear_seeds", &GraphType::clear_seeds)
 
-        .def("clear_seeds", [](GraphType & self){
-            self.clear_seeds();
-        })
+        .def("set_seed_state", [](GraphType & self,
+                                  const xt::pytensor<uint64_t, 2> & seed_edges,
+                                  const xt::pytensor<float, 1> & seed_weights){
+            self.set_seed_state(seed_edges, seed_weights);
+        }, py::arg("seed_edges"), py::arg("seed_weights"))
+        .def("clear_seed_state", &GraphType::clear_seed_state)
+
+        //
+        // node and coordinate functionality
+        //
 
         .def("get_node", [](const GraphType & self, const std::vector<int64_t> & coordinate){
             return self.get_node(coordinate);
@@ -248,6 +261,53 @@ PYBIND11_MODULE(_segmentation, m)
 
             return coordinates;
         }, py::arg("nodes"))
+
+        .def("get_seed_assignments_from_node_labels", [](const GraphType & self,
+                                                         const xt::pytensor<uint64_t, 1> & node_labels){
+            xt::pytensor<uint64_t, 2> seed_assignments = xt::zeros<uint64_t>({self.n_seeds(), 2UL});
+            self.get_seed_assignments_from_node_labels(node_labels, seed_assignments);
+            return seed_assignments;
+        }, py::arg("node_labels"))
+
+        .def("compute_state_for_segmentation", [](const GraphType & self,
+                                                  const xt::pyarray<float> & affs,
+                                                  const xt::pyarray<uint64_t> & seg,
+                                                  const std::vector<std::vector<int>> & offsets,
+                                                  const unsigned n_attactive_channels,
+                                                  const bool ignore_label) {
+
+            typedef std::unordered_map<std::pair<uint64_t, uint64_t>,
+                                       std::pair<float, bool>,
+                                       boost::hash<std::pair<uint64_t, uint64_t>>
+                                      > StateType;
+            StateType state;
+            self.compute_state_for_segmentation(affs, seg, offsets,
+                                                n_attactive_channels, ignore_label, state);
+
+            const int64_t n_edges = state.size();
+            xt::pytensor<uint64_t, 2> edges = xt::zeros<uint64_t>({n_edges, 2L});
+            xt::pytensor<float, 1> weights = xt::zeros<float>({n_edges});
+            xt::pytensor<bool, 1> is_attractive = xt::zeros<bool>({n_edges});
+
+            std::size_t edge_id = 0;
+            for(const auto & edge : state) {
+                const auto & uv = edge.first;
+                const auto & edge_state = edge.second;
+
+                edges(edge_id, 0) = uv.first;
+                edges(edge_id, 1) = uv.second;
+
+                weights(edge_id) = edge_state.first;
+                is_attractive(edge_id) = edge_state.second;
+
+                ++edge_id;
+            }
+
+            return std::make_tuple(edges, weights, is_attractive);
+
+        }, py::arg("affinities"), py::arg("segmentation"),
+           py::arg("offsets"), py::arg("n_attractive_channels"),
+           py::arg("ignore_label")=true)
 
         .def("compute_nh_and_weights", [](const GraphType & self,
                                           const xt::pyarray<float> & affs,
