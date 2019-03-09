@@ -19,7 +19,8 @@ namespace segmentation {
                                                               _ndim(shape.size()),
                                                               _n_nodes(std::accumulate(shape.begin(),
                                                                                        shape.end(),
-                                                                                       1, std::multiplies<std::size_t>())){
+                                                                                       1, std::multiplies<std::size_t>())),
+                                                              _intra_seed_weight(0.){
             init_strides();
         }
 
@@ -39,6 +40,14 @@ namespace segmentation {
 
         inline void clear_seeds() {
             _seeded_nodes.clear();
+        }
+
+        inline float get_intra_seed_weight() const {
+            return _intra_seed_weight;
+        }
+
+        inline void set_intra_seed_weight(const float weight) {
+            _intra_seed_weight = weight;
         }
 
         // TODO implement
@@ -186,20 +195,34 @@ namespace segmentation {
 
         template<class SEEDS>
         void init_seeds(const SEEDS & seeds) {
+            typedef typename SEEDS::value_type SeedType;
             _seeded_nodes.resize(_n_nodes);
+
+            // look-up-table for seed-id -> representative pixel
+            std::unordered_map<SeedType, uint64_t> seed_lut;
+
             util::for_each_coordinate(_shape, [&](const xt::xindex & coord){
-                const uint64_t seed_id = seeds[coord];
+                const SeedType seed_id = seeds[coord];
+
+                // 0 means un-seeded
                 if(seed_id == 0) {
                     return;
                 }
-                if(seed_id < _n_nodes) {
-                    std::cout << seed_id << " / " << _n_nodes << std::endl;
-                    throw std::runtime_error("Seeds need to have offset");
+
+                const uint64_t this_node = get_node(coord);
+                uint64_t representative_node;
+                // check if this seed is already in the lut
+                auto seed_it = seed_lut.find(seed_id);
+                // not in the lut -> make entry with this node id
+                if(seed_it == seed_lut.end()) {
+                    seed_lut.emplace(seed_id, this_node);
+                    representative_node = this_node;
+                } else { // already in the lut -> get represetnative
+                    representative_node = seed_it->second;
                 }
-                _seeded_nodes[get_node(coord)] = seed_id;
+                _seeded_nodes[this_node] = representative_node;
             });
         }
-
 
         template<class AFFS>
         inline void insertEdge(const AFFS & affs, const xt::xindex & aff_coord, const OffsetType & offset,
@@ -228,17 +251,32 @@ namespace segmentation {
                 }
             }
 
-            // if we have seeds, check if any of the nodes
-            // is seeded
-            bool haveSeed = false;
+            // if we have seeds, check if any of the nodes is seeded
+            bool have_seed = false;
             if(_seeded_nodes.size()) {
-                if(_seeded_nodes[u]) {
-                    haveSeed = true;
-                    u = _seeded_nodes[u];
+
+                // get the seed-ids
+                const uint64_t su = _seeded_nodes[u];
+                const uint64_t sv = _seeded_nodes[v];
+
+                // if both seed ids are not zero and identical:
+                // we need to make an edge between the two nodes
+                // with weight set to inter seed weight
+                if(su && (su == sv)) {
+                    if(u > v) {
+                        std::swap(u, v);
+                    }
+                    uv_ids.emplace_back(u, v);
+                    weights.emplace_back(_intra_seed_weight);
+                    return;
                 }
-                if(_seeded_nodes[v]) {
-                    haveSeed = true;
-                    v = _seeded_nodes[v];
+
+                // if we have at least one non-zero seed, set have_seed to true
+                // and set the node(s) to the seed-representative(s)
+                if(su || sv) {
+                    u = su ? su : u;
+                    v = sv ? sv : v;
+                    have_seed = true;
                 }
             }
 
@@ -247,12 +285,13 @@ namespace segmentation {
             }
 
             // if we have a seed, we need to check if we had this edge already
-            if(haveSeed) {
+            if(have_seed) {
                 auto uv = std::make_pair(u, v);
                 auto uv_it = std::find(uv_ids.begin(), uv_ids.end(), uv);
                 // we had this edge already -> update edge strength and skip
                 if(uv_it != uv_ids.end()) {
                     const std::size_t edgeId = std::distance(uv_ids.begin(), uv_it);
+                    // TODO enale other accumulation then max
                     weights[edgeId] = std::max(affs[aff_coord], weights[edgeId]);
                     return;
                 }
@@ -266,7 +305,7 @@ namespace segmentation {
         void compute_nh_and_weights_impl(const AFFS & affs, const std::vector<OffsetType> & offsets,
                                          std::vector<std::pair<uint64_t, uint64_t>> & uv_ids, std::vector<float> & weights) const {
             const auto & aff_shape = affs.shape();
-            // iterate over  neighbors, extract edges and weights
+            // iterate over coords, extract edges and weights
             util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
                 // set the ngb coord from the offsets
                 const auto & offset = offsets[aff_coord[0]];
@@ -285,7 +324,7 @@ namespace segmentation {
             std::uniform_real_distribution<float> distribution;
             auto draw = std::bind(distribution, generator);
 
-            // iterate over lr  neighbors, extract edges and weights
+            // iterate over coords, extract edges and weights
             const auto & aff_shape = affs.shape();
             util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
 
@@ -306,7 +345,7 @@ namespace segmentation {
                                          const std::vector<std::size_t> & strides, std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
                                          std::vector<float> & weights) const {
 
-            // iterate over lr  neighbors, extract edges and weights
+            // iterate over coords, extract edges and weights
             const auto & aff_shape = affs.shape();
             xt::xindex coord(_ndim), ngb_coord(_ndim);
             util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
@@ -329,6 +368,7 @@ namespace segmentation {
         xt::xindex _shape;
         unsigned _ndim;
         std::size_t _n_nodes;
+        float _intra_seed_weight;
         xt::xindex _strides;
         std::vector<bool> _masked_nodes;
         std::vector<uint64_t> _seeded_nodes;

@@ -191,6 +191,7 @@ PYBIND11_MODULE(_segmentation, m)
     py::class_<GraphType>(m, "MWSGridGraph")
         .def(py::init<const std::vector<std::size_t> &>(), py::arg("shape"))
         .def_property_readonly("n_nodes", &GraphType::n_nodes)
+        .def_property("intra_seed_weight", &GraphType::get_intra_seed_weight, &GraphType::set_intra_seed_weight)
 
         .def("set_mask", [](GraphType & self,
                             const xt::pyarray<bool> & mask){
