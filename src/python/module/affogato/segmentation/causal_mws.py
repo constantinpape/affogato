@@ -110,7 +110,10 @@ def compute_causal_mws(weights, offsets, mask,
         # TODO support causal strides
         # connect the grid graph to region graph of the last time step
         causal_weights = np.require(weights[causal_channels, t], requirements='C')
-        causal_uvs, causal_costs = graph.get_causal_edges(causal_weights, seg_prev, causal_offsets)
+        # TODO removed get causal edges
+        # use seed functionality instead
+        # causal_uvs, causal_costs = graph.get_causal_edges(causal_weights, seg_prev, causal_offsets)
+        causal_uvs, causal_costs = '', ''
 
         # concat all edges
         uvs = np.concatenate([uvs, causal_uvs], axis=0)

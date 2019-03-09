@@ -249,64 +249,6 @@ namespace segmentation {
             }
         }
 
-        // TODO we need to generalize this to support more than one time-step back ! than labels
-        // would be 1 dim bigger than _dim
-        template<class AFFS, class LABELS>
-        void get_causal_edges(const AFFS & affs, const LABELS & labels,
-                              const std::vector<OffsetType> & offsets,
-                              std::vector<EdgeType> & uv_ids,
-                              std::vector<float> & weights) const {
-            // get iteration shape
-            auto iter_shape = affs.shape();
-            iter_shape[0] = offsets.size();
-            xt::xindex coord(_ndim), prev_coord(_ndim);
-            // iterate over the causal offsets
-            util::for_each_coordinate(iter_shape, [&](const xt::xindex & aff_coord){
-                // set the spatial coordinates
-                std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
-                prev_coord = coord;
-
-                // set the spatial coords from the offsets
-                const auto & offset = offsets[aff_coord[0]];
-
-                // TODO for now we assume implicitely that offset[0] = -1 and that labels.ndim == _ndim
-                // need to generalize this to arbitrary causal offsets
-
-                // check that we are in range
-                bool out_of_range = false;
-                for(unsigned d = 0; d < _ndim; ++d) {
-                    prev_coord[d] += offset[d + 1];
-                    if(prev_coord[d] < 0 || prev_coord[d] >= _shape[d]) {
-                        out_of_range = true;
-                        break;
-                    }
-                }
-                if(out_of_range) {
-                    return;
-                }
-
-                // insert the edge and weight corresponding to this grid connection
-                uint64_t u = get_node(coord);
-                uint64_t v = labels[prev_coord];
-
-                // check if v is masked
-                if(v == 0) {
-                    return;
-                }
-
-                // if we have a mask,
-                // check if any of the nodes is masked
-                if(_masked_nodes.size()) {
-                    if(_masked_nodes[u]) {
-                        return;
-                    }
-                }
-
-                uv_ids.emplace_back(u, v);
-                weights.emplace_back(affs[aff_coord]);
-            });
-        }
-
     private:
 
         void init_strides() {
