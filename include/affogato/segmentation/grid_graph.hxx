@@ -1,6 +1,7 @@
 #pragma once
 
 #include <random>
+#include <boost/functional/hash.hpp>
 #include "xtensor/xtensor.hpp"
 #include "affogato/util.hxx"
 
@@ -14,6 +15,10 @@ namespace segmentation {
     public:
         typedef std::pair<uint64_t, uint64_t> EdgeType;
         typedef std::vector<int> OffsetType;
+        typedef std::unordered_map<std::pair<uint64_t, uint64_t>,
+                                   std::size_t,
+                                   boost::hash<std::pair<uint64_t, uint64_t>>
+                                  > SeedHelper;
 
         MWSGridGraph(const std::vector<std::size_t> & shape): _shape(shape.begin(), shape.end()),
                                                               _ndim(shape.size()),
@@ -251,33 +256,65 @@ namespace segmentation {
                 }
             }
 
-            // if we have seeds, check if any of the nodes is seeded
-            bool have_seed = false;
-            if(_seeded_nodes.size()) {
+            if(u > v) {
+                std::swap(u, v);
+            }
+            uv_ids.emplace_back(u, v);
+            weights.emplace_back(affs[aff_coord]);
+        }
 
-                // get the seed-ids
-                const uint64_t su = _seeded_nodes[u];
-                const uint64_t sv = _seeded_nodes[v];
 
-                // if both seed ids are not zero and identical:
-                // we need to make an edge between the two nodes
-                // with weight set to inter seed weight
-                if(su && (su == sv)) {
-                    if(u > v) {
-                        std::swap(u, v);
-                    }
-                    uv_ids.emplace_back(u, v);
-                    weights.emplace_back(_intra_seed_weight);
+        template<class AFFS>
+        inline void insertEdgeWithSeeds(const AFFS & affs, const xt::xindex & aff_coord, const OffsetType & offset,
+                                        std::vector<std::pair<uint64_t, uint64_t>> & uv_ids, std::vector<float> & weights,
+                                        SeedHelper & seed_helper) const{
+            // initialize the spatial coordinates
+            xt::xindex coord(_ndim);
+            std::copy(aff_coord.begin() + 1, aff_coord.end(), coord.begin());
+            xt::xindex ngb_coord = coord;
+
+            // update the ngb-coord and check that we are in range
+            for(unsigned d = 0; d < _ndim; ++d) {
+                ngb_coord[d] += offset[d];
+                if(ngb_coord[d] < 0 || ngb_coord[d] >= _shape[d]) {
                     return;
                 }
+            }
 
-                // if we have at least one non-zero seed, set have_seed to true
-                // and set the node(s) to the seed-representative(s)
-                if(su || sv) {
-                    u = su ? su : u;
-                    v = sv ? sv : v;
-                    have_seed = true;
+            uint64_t u = get_node(coord);
+            uint64_t v = get_node(ngb_coord);
+
+            // if we have a mask,
+            // check if any of the nodes is masked
+            if(_masked_nodes.size()) {
+                if(_masked_nodes[u] || _masked_nodes[v]) {
+                    return;
                 }
+            }
+
+            // get the seed-ids
+            bool have_seed = false;
+            const uint64_t su = _seeded_nodes[u];
+            const uint64_t sv = _seeded_nodes[v];
+
+            // if both seed ids are not zero and identical:
+            // we need to make an edge between the two nodes
+            // with weight set to inter seed weight
+            if(su && (su == sv)) {
+                if(u > v) {
+                    std::swap(u, v);
+                }
+                uv_ids.emplace_back(u, v);
+                weights.emplace_back(_intra_seed_weight);
+                return;
+            }
+
+            // if we have at least one non-zero seed, set have_seed to true
+            // and set the node(s) to the seed-representative(s)
+            if(su || sv) {
+                u = su ? su : u;
+                v = sv ? sv : v;
+                have_seed = true;
             }
 
             if(u > v) {
@@ -287,13 +324,16 @@ namespace segmentation {
             // if we have a seed, we need to check if we had this edge already
             if(have_seed) {
                 auto uv = std::make_pair(u, v);
-                auto uv_it = std::find(uv_ids.begin(), uv_ids.end(), uv);
+                auto uv_it = seed_helper.find(uv);
                 // we had this edge already -> update edge strength and skip
-                if(uv_it != uv_ids.end()) {
-                    const std::size_t edgeId = std::distance(uv_ids.begin(), uv_it);
+                if(uv_it != seed_helper.end()) {
+                    const std::size_t edgeId = uv_it->second;
                     // TODO enale other accumulation then max
                     weights[edgeId] = std::max(affs[aff_coord], weights[edgeId]);
                     return;
+                } else {
+                    const std::size_t edgeId = uv_ids.size();
+                    seed_helper.emplace(std::make_pair(u, v), edgeId);
                 }
             }
             uv_ids.emplace_back(u, v);
@@ -305,13 +345,25 @@ namespace segmentation {
         void compute_nh_and_weights_impl(const AFFS & affs, const std::vector<OffsetType> & offsets,
                                          std::vector<std::pair<uint64_t, uint64_t>> & uv_ids, std::vector<float> & weights) const {
             const auto & aff_shape = affs.shape();
+
             // iterate over coords, extract edges and weights
-            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
-                // set the ngb coord from the offsets
-                const auto & offset = offsets[aff_coord[0]];
-                // insert the edge and weight corresponding to this grid connection
-                insertEdge(affs, aff_coord, offset, uv_ids, weights);
-            });
+            if(_seeded_nodes.size()) {  // with seeds
+                SeedHelper seed_helper;
+                util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
+                    // set the ngb coord from the offsets
+                    const auto & offset = offsets[aff_coord[0]];
+                    // insert the edge and weight corresponding to this grid connection
+                    insertEdgeWithSeeds(affs, aff_coord, offset, uv_ids, weights, seed_helper);
+                });
+            }
+            else {  // without seeds
+                util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
+                    // set the ngb coord from the offsets
+                    const auto & offset = offsets[aff_coord[0]];
+                    // insert the edge and weight corresponding to this grid connection
+                    insertEdge(affs, aff_coord, offset, uv_ids, weights);
+                });
+            }
         }
 
         template<class AFFS>
@@ -319,48 +371,76 @@ namespace segmentation {
                                          const double fraction, std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
                                          std::vector<float> & weights) const {
 
-            //
+            const auto & aff_shape = affs.shape();
+            // random number generator
             std::default_random_engine generator;
             std::uniform_real_distribution<float> distribution;
             auto draw = std::bind(distribution, generator);
 
             // iterate over coords, extract edges and weights
-            const auto & aff_shape = affs.shape();
-            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
-
-                // keep edge if random number is below fraction
-                if(draw() > fraction) {
-                    return;
-                }
-
-                // set the ngb coord from the offsets
-                const auto & offset = offsets[aff_coord[0]];
-                // insert the edge and weight corresponding to this grid connection
-                insertEdge(affs, aff_coord, offset, uv_ids, weights);
-            });
+            if(_seeded_nodes.size()) {  // with seeds
+                SeedHelper seed_helper;
+                util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
+                    // keep edge if random number is below fraction
+                    if(draw() > fraction) {
+                        return;
+                    }
+                    // set the ngb coord from the offsets
+                    const auto & offset = offsets[aff_coord[0]];
+                    // insert the edge and weight corresponding to this grid connection
+                    insertEdgeWithSeeds(affs, aff_coord, offset, uv_ids, weights, seed_helper);
+                });
+            }
+            else { // without seeds
+                util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
+                    // keep edge if random number is below fraction
+                    if(draw() > fraction) {
+                        return;
+                    }
+                    // set the ngb coord from the offsets
+                    const auto & offset = offsets[aff_coord[0]];
+                    // insert the edge and weight corresponding to this grid connection
+                    insertEdge(affs, aff_coord, offset, uv_ids, weights);
+                });
+            }
         }
 
         template<class AFFS>
         void compute_nh_and_weights_impl(const AFFS & affs, const std::vector<OffsetType> & offsets,
                                          const std::vector<std::size_t> & strides, std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
                                          std::vector<float> & weights) const {
+            const auto & aff_shape = affs.shape();
 
             // iterate over coords, extract edges and weights
-            const auto & aff_shape = affs.shape();
-            xt::xindex coord(_ndim), ngb_coord(_ndim);
-            util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
-
-                for(unsigned d = 1; d < _ndim + 1; ++d) {
-                    if(aff_coord[d] % strides[d - 1] != 0) {
-                        return;
+            if(_seeded_nodes.size()) { // with seeds
+                SeedHelper seed_helper;
+                util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
+                    // check if this coordinate is in the strides
+                    for(unsigned d = 1; d < _ndim + 1; ++d) {
+                        if(aff_coord[d] % strides[d - 1] != 0) {
+                            return;
+                        }
                     }
-                }
-
-                // set the ngb coord from the offsets
-                const auto & offset = offsets[aff_coord[0]];
-                // insert the edge and weight corresponding to this grid connection
-                insertEdge(affs, aff_coord, offset, uv_ids, weights);
-            });
+                    // set the ngb coord from the offsets
+                    const auto & offset = offsets[aff_coord[0]];
+                    // insert the edge and weight corresponding to this grid connection
+                    insertEdgeWithSeeds(affs, aff_coord, offset, uv_ids, weights, seed_helper);
+                });
+            }
+            else { // without seeds
+                util::for_each_coordinate(aff_shape, [&](const xt::xindex & aff_coord){
+                    // check if this coordinate is in the strides
+                    for(unsigned d = 1; d < _ndim + 1; ++d) {
+                        if(aff_coord[d] % strides[d - 1] != 0) {
+                            return;
+                        }
+                    }
+                    // set the ngb coord from the offsets
+                    const auto & offset = offsets[aff_coord[0]];
+                    // insert the edge and weight corresponding to this grid connection
+                    insertEdge(affs, aff_coord, offset, uv_ids, weights);
+                });
+            }
         }
 
 
