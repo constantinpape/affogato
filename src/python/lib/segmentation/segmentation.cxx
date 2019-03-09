@@ -202,7 +202,7 @@ PYBIND11_MODULE(_segmentation, m)
         })
 
         .def("set_seeds", [](GraphType & self,
-                            const xt::pyarray<bool> & seeds){
+                            const xt::pyarray<uint64_t> & seeds){
             self.set_seeds(seeds);
         }, py::arg("seeds"))
 

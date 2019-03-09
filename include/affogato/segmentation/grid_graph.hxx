@@ -193,6 +193,7 @@ namespace segmentation {
                     return;
                 }
                 if(seed_id < _n_nodes) {
+                    std::cout << seed_id << " / " << _n_nodes << std::endl;
                     throw std::runtime_error("Seeds need to have offset");
                 }
                 _seeded_nodes[get_node(coord)] = seed_id;
