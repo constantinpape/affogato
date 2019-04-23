@@ -11,7 +11,7 @@ def get_valid_edges(shape, offsets, number_of_attractive_channels,
     valid_edges = np.ones(shape, dtype=bool)
     for i, offset in enumerate(offsets):
         for j, o in enumerate(offset):
-            inv_slice = slice(0, -o) if o < 0 else slice(image_shape[j] - o, image_shape[j])
+            inv_slice = slice(0, -o) if o < 0 else slice(max(image_shape[j] - o,0), image_shape[j])
             invalid_slice = (i, ) + tuple(slice(None) if j != d else inv_slice
                                           for d in range(ndim))
             valid_edges[invalid_slice] = 0
