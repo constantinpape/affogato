@@ -1,12 +1,27 @@
 find_package(xtensor-python REQUIRED)
 include_directories(${xtensor-python_INCLUDE_DIRS})
 
+find_package(xtensor-blas REQUIRED)
+include_directories(${xtensor-blas_INCLUDE_DIRS})
+
 find_package(pybind11 REQUIRED)
 include_directories(${pybind11_INCLUDE_DIRS})
 
 find_package(NUMPY REQUIRED)
 include_directories(${NUMPY_INCLUDE_DIRS})
 
+add_definitions(-DHAVE_CBLAS=1)
+
+if (WIN32)
+    find_package(OpenBLAS REQUIRED)
+    set(BLAS_LIBRARIES ${CMAKE_INSTALL_PREFIX}${OpenBLAS_LIBRARIES})
+else()
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+endif()
+
+message(STATUS "BLAS VENDOR:    " ${BLA_VENDOR})
+message(STATUS "BLAS LIBRARIES: " ${BLAS_LIBRARIES})
 
 add_subdirectory(lib)
 

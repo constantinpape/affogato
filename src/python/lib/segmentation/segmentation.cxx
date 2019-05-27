@@ -7,6 +7,7 @@
 
 #include "affogato/segmentation/mutex_watershed.hxx"
 #include "affogato/segmentation/semantic_mutex_watershed.hxx"
+#include "affogato/segmentation/conditional_mutex_watershed.hxx"
 #include "affogato/segmentation/connected_components.hxx"
 #include "affogato/segmentation/zwatershed.hxx"
 #include "affogato/segmentation/grid_graph.hxx"
@@ -81,7 +82,35 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("number_of_attractive_channels"),
        py::arg("image_shape"));
 
-
+    m.def("compute_conditional_mws_prim_segmentation_impl",[](const xt::pytensor<float, 1> & edge_weights,
+                                                  const xt::pytensor<bool, 1> & valid_edges,
+                                                  const std::vector<std::vector<int>> & offsets,
+                                                  const size_t number_of_attractive_channels,
+                                                  const std::vector<int> & image_shape){
+        int64_t number_of_nodes = 1;
+        for (auto & s: image_shape){
+            number_of_nodes *= s;
+        }
+        xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({number_of_nodes});
+        xt::pytensor<float, 1> used_weights = xt::zeros<float>({number_of_nodes * offsets.size()});
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::compute_conditional_mws_prim_segmentation(edge_weights,
+                                                                    valid_edges,
+                                                                    offsets,
+                                                                    number_of_attractive_channels,
+                                                                    image_shape,
+                                                                    node_labeling,
+                                                                    used_weights);
+        }
+        py::tuple out = py::make_tuple(node_labeling, used_weights);
+        return out;
+    }, py::arg("edge_weights"),
+       py::arg("valid_edges"),
+       py::arg("offsets"),
+       py::arg("number_of_attractive_channels"),
+       py::arg("image_shape"));
+       
     m.def("compute_mws_prim_segmentation_impl",[](const xt::pytensor<float, 1> & edge_weights,
                                                   const xt::pytensor<bool, 1> & valid_edges,
                                                   const std::vector<std::vector<int>> & offsets,

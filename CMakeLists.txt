@@ -41,6 +41,13 @@ add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 # adaptions to travis build
 option(WITHIN_TRAVIS OFF)
 
+##############################
+# Set up pytorch
+##############################
+
+# find_package(Torch REQUIRED)
+# include_directories(${TORCH_INCLUDE_DIR})
+# target_link_libraries(example-app "${TORCH_LIBRARIES}")
 
 ###############################
 # Set up conda env

@@ -1,4 +1,5 @@
 from ._segmentation import connected_components, compute_zws_segmentation, compute_mws_clustering, MWSGridGraph
 from .mws import compute_mws_segmentation
 from .causal_mws import compute_causal_mws
+from .conditional_mws import compute_conditional_mws_segmentation
 from .semantic_mws import compute_semantic_mws_segmentation, compute_semantic_mws_clustering

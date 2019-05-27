@@ -60,6 +60,8 @@ macro(addPythonModule)
     # link additional libraries
     target_link_libraries(_${MODULE_NAME}
         PUBLIC
+        ${BLAS_LIBRARIES}
+        ${LAPACK_LIBRARIES}
         ${PYTHON_LIBRARIES}
         ${ADD_PY_MOD_LIBRRARIES}
     )
