@@ -22,7 +22,7 @@ class InteractiveMWS():
         self._update_graph()
 
         # TODO
-        self._locked_seeds = []
+        self._locked_seeds = {}
 
     @property
     def shape(self):
@@ -72,7 +72,8 @@ class InteractiveMWS():
         self._update_graph()
 
     def clear_seeds(self):
-        pass
+        self._grid_graph.clear_seeds()
+        self._seeds = np.zeros(self.shape, dtype='uint64')
 
     #
     # segmentation functionality
@@ -80,6 +81,7 @@ class InteractiveMWS():
 
     def __call__(self):
         n_nodes = self._grid_graph.n_nodes
+        # TODO if we have locked seeds / segments, we need to mask them here
         seg = compute_mws_clustering(n_nodes, self._uvs, self._mutex_uvs,
                                      self._weights, self._mutex_weights)
         return seg.reshape(self.shape)
@@ -88,11 +90,11 @@ class InteractiveMWS():
     # locked segment functionality
     #
 
-    # TODO
     def lock_seeds(self, locked_seeds):
-        pass
+        self._locked_seeds.update(locked_seeds)
 
-    # TODO unlock
+    def unlock_seeds(self, unlock_seeds):
+        self._locked_seeds.difference_update(unlock_seeds)
 
     #
     # tiktorch functionality
