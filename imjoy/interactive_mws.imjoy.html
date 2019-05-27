@@ -17,7 +17,7 @@
     "icon": "extension",
     "api_version": "0.1.5",
     "env": "conda create -n mws-cpu python=3.7",
-    "requirements": ["conda: -c cpape -c conda-forge h5py affogato scikit-image vigra"],
+    "requirements": ["conda: -c cpape -c conda-forge h5py affogato scikit-image vigra pillow"],
     "dependencies": []
 }
 </config >
@@ -28,10 +28,12 @@ from imjoy import api
 import base64
 from affogato.segmentation import compute_mws_clustering, MWSGridGraph
 from skimage.io import imread, imsave
+from PIL import Image
 import numpy as np
-
+from time import sleep
 # import torch
-
+import io
+import asyncio
 
 class ImJoyPlugin():
 
@@ -100,7 +102,7 @@ class ImJoyPlugin():
 
         return segmentation.reshape(image_shape)
 
-    def run(self, ctx):
+    def dummy_run(self, ctx):
 
         raw_file = "/home/swolf/local/data/hackathon2019/slice0.png"
         model_file = "/home/swolf/local/data/models/isbi_2d.pytorch"
@@ -130,6 +132,47 @@ class ImJoyPlugin():
             imgurl = 'data:image/png;base64,' + result
             api.createWindow(type = 'imjoy/image', w=12, h=15,data = {"src": imgurl})
 
+    async def update_segmentation(self, ann_window):
+        coutner = 0
+        while True:
+            coutner += 1
+            dirty = ann_window.is_dirty()
+            #api.log("dirty inside of loop", str(dirty), type(dirty))
+            if dirty:
+                api.log("dirty!")
+                img = np.random.randint(0, 255, (500, 400, 3), dtype=np.uint8)
+                pimg = Image.fromarray(img)
+                pimg.save('blah.png')
+                with open('blah.png', 'rb') as f:
+                    result = base64.b64encode(f.read()).decode('ascii')
+                imgurl = 'data:image/png;base64,' + result
+                data = {'url': imgurl, 'w': 500, 'h':400}
+                ann_window.displayimage(data)
+                ann_window.set_clean()
+            else:
+                api.log("not dirty")
+            api.log("in the loop", str(coutner))
+
+            await asyncio.sleep(1)
+
+
+    async def run(self, ctx):
+        print("SEHR VIEL TEXT")
+        ann_window = await api.createWindow(type="MWSAnnotator", name="thiswindow", sandbox="allow-same-origin allow-scripts", data={})
+        print("show_image ")
+
+        # asyncio.ensure_future(self.update_segmentation(ann_window))
+        
+        loop = asyncio.get_event_loop()
+        
+        #try:
+        asyncio.ensure_future(self.update_segmentation(ann_window))
+        #loop.run_forever()
+        #finally:
+        #    loop.close()
+
+
+        print("done")
 
 api.export(ImJoyPlugin())
 </script >
