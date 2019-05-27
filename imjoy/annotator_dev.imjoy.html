@@ -1479,24 +1479,25 @@ const app = new Vue({
             this.draw = draw
         },
         async saveAnnotation(features){
-            const allFeatures = features || this.vector_source.getFeatures();
-            let sample = this.selected_sample
-            let sample_path = pathJoin(this.selected_dataset.root_folder, sample.group, sample.name)
-            let annotationPath = null
-            if (sample.data['annotation.json'] && sample.data['annotation.json'].file_name) {
-                annotationPath = pathJoin(sample_path, sample.data['annotation.json'].file_name)
-            } else {
-                annotationPath = pathJoin(sample_path, 'annotation.json')
-                sample.data['annotation.json'] = {file_name: 'annotation.json'}
-            }
-            if (!await exists(sample_path)) {
-                await mkdir(sample_path)
-            }
-            const format = new ol.format.GeoJSON();
-            const routeFeatures = format.writeFeaturesObject(allFeatures, {decimals: 1});
-            routeFeatures['bbox'] = this.bbox
-            await writeFile(annotationPath, JSON.stringify(routeFeatures))
-            await this.saveConfig()
+            // const allFeatures = features || this.vector_source.getFeatures();
+            // let sample = this.selected_sample
+            // let sample_path = pathJoin(this.selected_dataset.root_folder, sample.group, sample.name)
+            // let annotationPath = null
+            // if (sample.data['annotation.json'] && sample.data['annotation.json'].file_name) {
+            //     annotationPath = pathJoin(sample_path, sample.data['annotation.json'].file_name)
+            // } else {
+            //     annotationPath = pathJoin(sample_path, 'annotation.json')
+            //     sample.data['annotation.json'] = {file_name: 'annotation.json'}
+            // }
+            // if (!await exists(sample_path)) {
+            //     await mkdir(sample_path)
+            // }
+            // const format = new ol.format.GeoJSON();
+            // const routeFeatures = format.writeFeaturesObject(allFeatures, {decimals: 1});
+            // routeFeatures['bbox'] = this.bbox
+            // await writeFile(annotationPath, JSON.stringify(routeFeatures))
+            // await this.saveConfig()
+            api.alert('run MWS now')
         },
         // Save annotations
         exportAnnotation() {
