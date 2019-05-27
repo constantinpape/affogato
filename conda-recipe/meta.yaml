@@ -22,11 +22,11 @@ requirements:
   build:
     - python {{PY_VER}}*
     - cmake
-    - boost 1.66.0  # the boost version needs to be fixed, because we are linking against specific shared objects
-    - xtensor-python
+    - boost 1.68.0  # the boost version needs to be fixed, because we are linking against specific shared objects
+    - xtensor-python 0.22.0
   run:
     - python {{PY_VER}}*
-    - boost 1.66.0
+    - boost 1.68.0
     - numpy # do not need to constrain np version
 
 

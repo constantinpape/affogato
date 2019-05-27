@@ -191,7 +191,8 @@ PYBIND11_MODULE(_segmentation, m)
     py::class_<GraphType>(m, "MWSGridGraph")
         .def(py::init<const std::vector<std::size_t> &>(), py::arg("shape"))
         .def_property_readonly("n_nodes", &GraphType::n_nodes)
-        .def_property("intra_seed_weight", &GraphType::get_intra_seed_weight, &GraphType::set_intra_seed_weight)
+        .def_property("same_seed_weight", &GraphType::get_same_seed_weight, &GraphType::set_same_seed_weight)
+        .def_property("different_seed_weight", &GraphType::get_different_seed_weight, &GraphType::set_different_seed_weight)
 
         //
         // mask functionality
@@ -207,18 +208,11 @@ PYBIND11_MODULE(_segmentation, m)
         // seed functionality
         //
 
-        .def("set_seeds", [](GraphType & self,
+        .def("update_seeds", [](GraphType & self,
                             const xt::pyarray<uint64_t> & seeds){
-            self.set_seeds(seeds);
+            self.update_seeds(seeds);
         }, py::arg("seeds"))
         .def("clear_seeds", &GraphType::clear_seeds)
-
-        .def("set_seed_state", [](GraphType & self,
-                                  const xt::pytensor<uint64_t, 2> & seed_edges,
-                                  const xt::pytensor<float, 1> & seed_weights){
-            self.set_seed_state(seed_edges, seed_weights);
-        }, py::arg("seed_edges"), py::arg("seed_weights"))
-        .def("clear_seed_state", &GraphType::clear_seed_state)
 
         //
         // node and coordinate functionality
@@ -262,11 +256,10 @@ PYBIND11_MODULE(_segmentation, m)
             return coordinates;
         }, py::arg("nodes"))
 
-        .def("get_seed_assignments_from_node_labels", [](const GraphType & self,
-                                                         const xt::pytensor<uint64_t, 1> & node_labels){
-            xt::pytensor<uint64_t, 2> seed_assignments = xt::zeros<uint64_t>({self.n_seeds(), 2UL});
-            self.get_seed_assignments_from_node_labels(node_labels, seed_assignments);
-            return seed_assignments;
+        .def("relabel_to_seeds", [](const GraphType & self,
+                                    xt::pytensor<uint64_t, 1> & node_labels){
+            self.relabel_to_seeds(node_labels);
+            return node_labels;
         }, py::arg("node_labels"))
 
         .def("compute_state_for_segmentation", [](const GraphType & self,
