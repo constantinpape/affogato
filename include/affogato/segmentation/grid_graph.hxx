@@ -33,12 +33,6 @@ namespace segmentation {
             init_strides();
         }
 
-        // TODO implement
-        // initialize the nearest neighbor graph
-        inline void init_nn_graph() {
-
-        }
-
         //
         // mask functionality
         //
