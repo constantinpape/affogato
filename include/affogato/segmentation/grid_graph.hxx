@@ -58,9 +58,8 @@ namespace segmentation {
                 }
                 const uint64_t this_node = get_node(coord);
                 _seed_ids.insert(seed_id);
-
-                // set this node to the representative node
                 _seeded_nodes[this_node] = seed_id;
+                _seed_representatives[seed_id] = this_node;
             });
         }
 
@@ -223,20 +222,49 @@ namespace segmentation {
             return _seed_ids.size();
         }
 
-        // FIXME
-        template<class NODE_LABELS, class SEED_ASSIGNMENTS>
-        inline void get_seed_assignments_from_node_labels(const NODE_LABELS & node_labels,
-                                                          SEED_ASSIGNMENTS & seed_assignments) const {
-            /*
-            std::size_t seed_index = 0;
-            for(const uint64_t seed_id : _seed_lut) {
-                const uint64_t seed_id = seed_it.first;
-                const uint64_t representative_node = seed_it.second;
-                seed_assignments(seed_index, 0) = seed_id;
-                seed_assignments(seed_index, 1) = node_labels(representative_node);
-                ++seed_index;
+        template<class NODE_LABELS>
+        inline void relabel_to_seeds(NODE_LABELS & node_labels) const {
+            uint64_t next_id = *std::max_element(node_labels.begin(), node_labels.end()) + 1;
+
+            std::unordered_map<uint64_t, uint64_t> seed_labels;
+            for(uint64_t seed_id : _seed_ids) {
+                const uint64_t representative = _seed_representatives.at(seed_id);
+                seed_labels[node_labels(representative)] = seed_id;
             }
-            */
+
+            std::unordered_map<uint64_t, uint64_t> new_labels;
+            for(std::size_t node_id = 0; node_id < node_labels.size(); ++node_id) {
+                uint64_t label = node_labels[node_id];
+
+                // check if this label should be mapped to a seed
+                auto label_it = seed_labels.find(label);
+                if(label_it != seed_labels.end()) {
+                    label = label_it->second;
+                }
+
+                // otherwise check if this label needs to be remapped
+                else {
+                    // check if this label overlaps with a seed
+                    auto seed_it = _seed_ids.find(label);
+
+                    if(seed_it != _seed_ids.end()) {
+                        // if it does overlap, check if we have assigned it
+                        // to a new label already
+                        auto new_it = new_labels.find(label);
+                        if(new_it == new_labels.end()) {
+                            // no we haven't -> get the next id
+                            new_labels[label] = next_id;
+                            label = next_id;
+                            ++next_id;
+                        } else {
+                            // yes we have
+                            label = new_it->second;
+                        }
+                    }
+                }
+
+                node_labels[node_id] = label;
+            }
         }
 
     private:
@@ -414,9 +442,11 @@ namespace segmentation {
 
         // data structures for masks
         std::vector<bool> _masked_nodes;
+
         // data structures for seeds
         std::unordered_map<uint64_t, uint64_t> _seeded_nodes;
         std::set<uint64_t> _seed_ids;
+        std::unordered_map<uint64_t, uint64_t> _seed_representatives;
     };
 
 

@@ -256,11 +256,10 @@ PYBIND11_MODULE(_segmentation, m)
             return coordinates;
         }, py::arg("nodes"))
 
-        .def("get_seed_assignments_from_node_labels", [](const GraphType & self,
-                                                         const xt::pytensor<uint64_t, 1> & node_labels){
-            xt::pytensor<uint64_t, 2> seed_assignments = xt::zeros<uint64_t>({self.n_seeds(), 2UL});
-            self.get_seed_assignments_from_node_labels(node_labels, seed_assignments);
-            return seed_assignments;
+        .def("relabel_to_seeds", [](const GraphType & self,
+                                    xt::pytensor<uint64_t, 1> & node_labels){
+            self.relabel_to_seeds(node_labels);
+            return node_labels;
         }, py::arg("node_labels"))
 
         .def("compute_state_for_segmentation", [](const GraphType & self,

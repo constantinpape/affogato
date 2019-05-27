@@ -34,14 +34,16 @@ class InteractiveMWS():
 
     def _update_graph(self):
         # compute the attractive edges
-        self._grid_graph.same_seed_weight = 1
+        # we set to > 1 to make sure these are the very first in priority
+        self._grid_graph.same_seed_weight = 1.1
         self._grid_graph.different_seed_weight = 0
         self._uvs, self._weights = self._grid_graph.compute_nh_and_weights(1. - self._affinities[:self._n_attractive],
                                                                            self._offsets[:self._n_attractive])
 
         # compute the repulsive edges
         self._grid_graph.same_seed_weight = 0
-        self._grid_graph.different_seed_weight = 1
+        # we set to > 1 to make sure these are the very first in priority
+        self._grid_graph.different_seed_weight = 1.1
         self._mutex_uvs, self._mutex_weights = self._grid_graph.compute_nh_and_weights(self._affinities[self._n_attractive:],
                                                                                        self._offsets[self._n_attractive:],
                                                                                        strides=self.strides,
@@ -84,6 +86,7 @@ class InteractiveMWS():
         # TODO if we have locked seeds / segments, we need to mask them here
         seg = compute_mws_clustering(n_nodes, self._uvs, self._mutex_uvs,
                                      self._weights, self._mutex_weights)
+        seg = self._grid_graph.relabel_to_seeds(seg)
         return seg.reshape(self.shape)
 
     #

@@ -11,7 +11,6 @@ class TestInteractiveMws(unittest.TestCase):
 
     def _make_imws(self):
         from affogato.segmentation import InteractiveMWS
-
         aff_shape = (len(self.offsets),) + self.shape
         affs = np.random.rand(*aff_shape).astype('float32')
         imws = InteractiveMWS(affs, self.offsets)
@@ -28,6 +27,12 @@ class TestInteractiveMws(unittest.TestCase):
         seeds = {1: (np.array([0, 0, 0], dtype='int'), np.array([1, 2, 3], dtype='int')),
                  2: (np.array([4, 5, 6], dtype='int'), np.array([1, 2, 3], dtype='int'))}
         imws.update_seeds(seeds)
+        seg = imws()
+        self.assertEqual(seg.shape, self.shape)
+        for seed_id, coords in seeds.items():
+            out = seg[coords]
+            self.assertTrue(np.allclose(out, seed_id))
+
 
 
 if __name__ == '__main__':
