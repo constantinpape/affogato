@@ -2,6 +2,7 @@ import numpy as np
 from ._segmentation import compute_mws_clustering, MWSGridGraph
 
 
+# TODO support a data backend like zarr etc.
 class InteractiveMWS():
     def __init__(self, affinities, offsets, n_attractive_channels=2,
                  strides=None, randomize_strides=False):
@@ -20,6 +21,9 @@ class InteractiveMWS():
         # comppute the initial graph shape (= uv-ids, mutex-uv-ids, ...)
         self._update_graph()
 
+        # TODO
+        self._locked_seeds = []
+
     @property
     def shape(self):
         return self._shape
@@ -29,8 +33,15 @@ class InteractiveMWS():
     #
 
     def _update_graph(self):
+        # compute the attractive edges
+        self._grid_graph.same_seed_weight = 1
+        self._grid_graph.different_seed_weight = 0
         self._uvs, self._weights = self._grid_graph.compute_nh_and_weights(1. - self._affinities[:self._n_attractive],
                                                                            self._offsets[:self._n_attractive])
+
+        # compute the repulsive edges
+        self._grid_graph.same_seed_weight = 0
+        self._grid_graph.different_seed_weight = 1
         self._mutex_uvs, self._mutex_weights = self._grid_graph.compute_nh_and_weights(self._affinities[self._n_attractive:],
                                                                                        self._offsets[self._n_attractive:],
                                                                                        strides=self.strides,
@@ -57,7 +68,7 @@ class InteractiveMWS():
             self._update_seeds_sparse(new_seeds)
         else:
             raise ValueError("new_seeds must be np.ndarray or dict, got %s" % type(new_seeds))
-        self._grid_graph.set_seeds(self._seeds)
+        self._grid_graph.update_seeds(self._seeds)
         self._update_graph()
 
     def clear_seeds(self):
@@ -74,12 +85,27 @@ class InteractiveMWS():
         return seg.reshape(self.shape)
 
     #
+    # locked segment functionality
+    #
+
+    # TODO
+    def lock_seeds(self, locked_seeds):
+        pass
+
+    # TODO unlock
+
+    #
     # tiktorch functionality
     #
 
+    # TODO support a ROI
     def update_affinities(self, affinities):
         if affinities.shape[1:] != self.shape:
             raise ValueError("Invalid Shape")
         if affinities.shape[0] != len(self._offsets):
             raise ValueError("Invalid number of channels")
         self._affinities = affinities
+
+    # TODO return the locked segments
+    def get_locked_segments(self):
+        pass
