@@ -48,7 +48,7 @@ class InteractiveMWS():
 
     def _update_seeds_sparse(self, new_seeds):
         for seed_id, coords in new_seeds.items():
-            self._seeds[coods] = seed_id
+            self._seeds[coords] = seed_id
 
     def update_seeds(self, new_seeds):
         if isinstance(new_seeds, np.ndarray):

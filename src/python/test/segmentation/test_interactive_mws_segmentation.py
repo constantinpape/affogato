@@ -22,6 +22,13 @@ class TestInteractiveMws(unittest.TestCase):
         seg = imws()
         self.assertEqual(seg.shape, self.shape)
 
+    def test_interactive_mws_with_seeds(self):
+        imws = self._make_imws()
+        # update seeds from dict
+        seeds = {1: (np.array([0, 0, 0], dtype='int'), np.array([1, 2, 3], dtype='int')),
+                 2: (np.array([4, 5, 6], dtype='int'), np.array([1, 2, 3], dtype='int'))}
+        imws.update_seeds(seeds)
+
 
 if __name__ == '__main__':
     unittest.main()
