@@ -2,6 +2,40 @@ import numpy as np
 from ._segmentation import compute_mws_clustering, MWSGridGraph
 
 
+def parse_geojson(geojson):
+    """ Parse input dicts in geo json format
+        and return input for ``InteractiveMWS.update_seeds``
+    """
+    # we always expect to get a 'FeatureCollection'
+    if geojson.get("type", "") != "FeatureCollection":
+        raise ValueError("Expect to get a geojson with FeatureCollection")
+
+    seed_coordinates = {}
+    annotations = geojson['features']
+
+    # iterate over the annotations and get the coords
+    for annotation in annotations:
+        # get the seed id from the properties.
+        # TODO how is the key called in Imjoy?
+        seed_name = annotation['properties']['name']
+        coords = annotation['coordinates']
+
+        # TODO we need some convention for mapping the seed name to an id
+        seed_id = int(seed_name)
+
+        if seed_name in seed_coordinates:
+            seed_coordinates[seed_id].extend(coords)
+        else:
+            seed_coordinates[seed_id] = coords
+
+    # postprocess the coordinates
+    seed_coordinates = {seed_id: tuple(np.array(coord[i], dtype='uint64')
+                                       for coord in coords for i in range(2))
+                        for seed_id, coords in seed_coordinates.items()}
+
+    return seed_coordinates
+
+
 # TODO support a data backend like zarr etc.
 class InteractiveMWS():
     def __init__(self, affinities, offsets, n_attractive_channels=2,
