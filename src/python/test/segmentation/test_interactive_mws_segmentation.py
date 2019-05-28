@@ -39,13 +39,13 @@ class TestInteractiveMws(unittest.TestCase):
         geojson = {'type': 'FeatureCollection',
                    'features': [
                                 {'type': 'Feature',
-                                 'geometry': 'Point',
-                                 'coordinates': [0.1, 1.0],
+                                 'geometry': {'type': 'Point',
+                                              'coordinates': [0.1, 1.0]},
                                  'properties': {'name': '1'}
                                 },
                                 {'type': 'Feature',
-                                 'geometry': 'LineString',
-                                 'coordinates': [[4., 1.], [5., 2.]],
+                                 'geometry': {'type': 'LineString',
+                                              'coordinates': [[4., 1.], [5., 2.]]},
                                  'properties': {'name': '2'}}
                                ]
                   }
