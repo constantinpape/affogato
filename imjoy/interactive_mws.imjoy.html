@@ -1,8 +1,8 @@
-<docs lang = "markdown" >
+<docs lang = "markdown">
 [TODO: write documentation for this plugin.]
-</docs >
+</docs>
 
-<config lang = "json" >
+<config lang = "json">
 {
     "name": "MWS Interactive",
     "type": "native-python",
@@ -20,10 +20,10 @@
     "requirements": ["conda: -c cpape -c conda-forge h5py affogato scikit-image vigra pillow"],
     "dependencies": []
 }
-</config >
+</config>
 
 
-<script lang = "python" >
+<script lang = "python">
 from imjoy import api
 import base64
 from affogato.segmentation import compute_mws_clustering, MWSGridGraph
@@ -34,6 +34,8 @@ from time import sleep
 # import torch
 import io
 import asyncio
+import concurrent
+
 
 class ImJoyPlugin():
 
@@ -130,30 +132,17 @@ class ImJoyPlugin():
             api.log("QQQQQQ" + str(type(data)))
             result = base64.b64encode(data).decode('ascii')
             imgurl = 'data:image/png;base64,' + result
-            api.createWindow(type = 'imjoy/image', w=12, h=15,data = {"src": imgurl})
+            api.createWindow(type='imjoy/image', w=12, h=15, data={"src": imgurl})
 
-    async def update_segmentation(self, ann_window):
-        coutner = 0
-        while True:
-            coutner += 1
-            dirty = ann_window.is_dirty()
-            #api.log("dirty inside of loop", str(dirty), type(dirty))
-            if dirty:
-                api.log("dirty!")
-                img = np.random.randint(0, 255, (500, 400, 3), dtype=np.uint8)
-                pimg = Image.fromarray(img)
-                pimg.save('blah.png')
-                with open('blah.png', 'rb') as f:
-                    result = base64.b64encode(f.read()).decode('ascii')
-                imgurl = 'data:image/png;base64,' + result
-                data = {'url': imgurl, 'w': 500, 'h':400}
-                ann_window.displayimage(data)
-                ann_window.set_clean()
-            else:
-                api.log("not dirty")
-            api.log("in the loop", str(coutner))
-
-            await asyncio.sleep(1)
+    def update_segmentation(self, coords):
+        print("working hard")
+        img = np.random.randint(0, 255, (500, 400, 3), dtype=np.uint8)
+        pimg = Image.fromarray(img)
+        pimg.save('blah.png')
+        with open('blah.png', 'rb') as f:
+            result = base64.b64encode(f.read()).decode('ascii')
+        imgurl = 'data:image/png;base64,' + result
+        return {'url': imgurl, 'w': 500, 'h': 400}
 
 
     async def run(self, ctx):
@@ -161,18 +150,41 @@ class ImJoyPlugin():
         ann_window = await api.createWindow(type="MWSAnnotator", name="thiswindow", sandbox="allow-same-origin allow-scripts", data={})
         print("show_image ")
 
-        # asyncio.ensure_future(self.update_segmentation(ann_window))
-        
         loop = asyncio.get_event_loop()
-        
-        #try:
-        asyncio.ensure_future(self.update_segmentation(ann_window))
-        #loop.run_forever()
-        #finally:
-        #    loop.close()
 
+        seed_name_map = {}
+        max_label = 1
 
-        print("done")
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+
+            counter = 0
+            while True:
+                counter += 1
+                dirty = await ann_window.is_dirty()
+                if dirty:
+                    print("found dirty")
+                    coords = await ann_window.getAnnotation()
+
+                    # create names for coord objects
+
+                    for c_dict in coords['features']:
+                        label = c_dict['properties']['label']
+                        if label not in seed_name_map:
+                            seed_name_map[label] = max_label
+                            max_label += 1
+
+                        c_dict['properties']["name"] = str(seed_name_map[label])
+
+                    print("coords ", coords)
+
+                    result = await loop.run_in_executor(
+                        pool, self.update_segmentation, coords)
+                    
+                    await ann_window.displayimage(result)
+                    await ann_window.set_clean()
+                await asyncio.sleep(1)
+
+        print('custom thread pool', result)
 
 api.export(ImJoyPlugin())
-</script >
+</script>

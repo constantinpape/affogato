@@ -66,7 +66,6 @@ const createStringXY = ol.coordinate.createStringXY;
 const DragAndDrop = ol.interaction.DragAndDrop;
 const GeoJSON = ol.format.GeoJSON;
 const RasterSource = ol.source.Raster;
-annotation_dirty = true;
 function pathJoin(...parts) {
     let separator = '/';
     let replace = new RegExp(separator + '{1,}', 'g');
@@ -614,6 +613,7 @@ const app = new Vue({
         loading: false,
         draw_feature_list: [],
         undo_button_flag: true,
+        annotation_dirty: true,
         button_list: []
     },
     mounted() {
@@ -1480,7 +1480,7 @@ const app = new Vue({
             this.draw = draw
         },
         async saveAnnotation(features){
-            annotation_dirty = true;
+            this.annotation_dirty = true;
             console.log("SET DIRTY")
             const allFeatures = features || this.vector_source.getFeatures();
 
@@ -1506,6 +1506,12 @@ const app = new Vue({
 
             await writeFile(annotationPath, JSON.stringify(routeFeatures))
             await this.saveConfig()
+        },
+        async getAnnotation(){
+            const allFeatures = this.vector_source.getFeatures();
+            const format = new ol.format.GeoJSON();
+            const routeFeatures = format.writeFeaturesObject(allFeatures, {decimals: 1});
+            return await routeFeatures;
         },
         // Save annotations
         exportAnnotation() {
@@ -1826,6 +1832,11 @@ class ImJoyPlugin {
     set_clean(){
         app.annotation_dirty = false
         console.log("set clean", app.annotation_dirty)
+        app.$forceUpdate()
+    }
+
+    async getAnnotation(){
+        return app.getAnnotation()
     }
 
     async getDataset(){
@@ -2090,6 +2101,9 @@ api.export(new ImJoyPlugin())
 
         <button class="btn btn-sm" title="delete" @Click="deleteAnnotation()"><i class="icon icon-delete"></i></button>
         <button :disabled="!undo_button_flag" class="btn btn-sm" title="undo" @click="undoDraw()"><i class="fas fa-undo"></i></button>
+        <p> {{annotation_dirty}} </p>
+
+        <button class="btn btn-sm" title="set dirty" @click="annotation_dirty=true">set annotation dirty</button>
 
         <div id="buttons" class="btn-group">
             <div class="dropdown">
