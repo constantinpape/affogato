@@ -1789,13 +1789,24 @@ class ImJoyPlugin {
             crossOrigin: 'anonymous'
         })
         app.image_layer.setSource(image_source);
+    }
+
+    async centeronimage(segmentation_image){
+
+        let extent = [0, 0, segmentation_image.w, segmentation_image.h];
+        let projection = new Projection({
+            code: 'image',
+            units: 'pixels',
+            extent: extent
+        })
+        
         app.map.setView( new View({
-                   projection: projection,
-                   center: center || getCenter(extent),
-                   extent: extent,
-                   zoom: 2,
-                   maxZoom: 8
-               }))
+            projection: projection,
+            center: getCenter(extent),
+            extent: extent,
+            zoom: 2,
+            maxZoom: 8
+        }))
     }
 
     async displayimage(segmentation_image){
@@ -1814,14 +1825,6 @@ class ImJoyPlugin {
         })
 
         app.image_layer.setSource(image_source)
-
-        app.map.setView( new View({
-            projection: projection,
-            center: getCenter(extent),
-            extent: extent,
-            zoom: 2,
-            maxZoom: 8
-        }))
     }
 
     is_dirty(){
