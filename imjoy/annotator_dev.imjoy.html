@@ -66,6 +66,7 @@ const createStringXY = ol.coordinate.createStringXY;
 const DragAndDrop = ol.interaction.DragAndDrop;
 const GeoJSON = ol.format.GeoJSON;
 const RasterSource = ol.source.Raster;
+annotation_dirty = true;
 function pathJoin(...parts) {
     let separator = '/';
     let replace = new RegExp(separator + '{1,}', 'g');
@@ -1479,25 +1480,32 @@ const app = new Vue({
             this.draw = draw
         },
         async saveAnnotation(features){
-            // const allFeatures = features || this.vector_source.getFeatures();
-            // let sample = this.selected_sample
-            // let sample_path = pathJoin(this.selected_dataset.root_folder, sample.group, sample.name)
-            // let annotationPath = null
-            // if (sample.data['annotation.json'] && sample.data['annotation.json'].file_name) {
-            //     annotationPath = pathJoin(sample_path, sample.data['annotation.json'].file_name)
-            // } else {
-            //     annotationPath = pathJoin(sample_path, 'annotation.json')
-            //     sample.data['annotation.json'] = {file_name: 'annotation.json'}
-            // }
-            // if (!await exists(sample_path)) {
-            //     await mkdir(sample_path)
-            // }
-            // const format = new ol.format.GeoJSON();
-            // const routeFeatures = format.writeFeaturesObject(allFeatures, {decimals: 1});
-            // routeFeatures['bbox'] = this.bbox
-            // await writeFile(annotationPath, JSON.stringify(routeFeatures))
-            // await this.saveConfig()
-            api.alert('run MWS now')
+            annotation_dirty = true;
+            console.log("SET DIRTY")
+            const allFeatures = features || this.vector_source.getFeatures();
+
+            console.log(allFeatures)
+
+            let sample = this.selected_sample
+            let sample_path = pathJoin(this.selected_dataset.root_folder, sample.group, sample.name)
+            let annotationPath = null
+            if (sample.data['annotation.json'] && sample.data['annotation.json'].file_name) {
+                annotationPath = pathJoin(sample_path, sample.data['annotation.json'].file_name)
+            } else {
+                annotationPath = pathJoin(sample_path, 'annotation.json')
+                sample.data['annotation.json'] = {file_name: 'annotation.json'}
+            }
+            if (!await exists(sample_path)) {
+                await mkdir(sample_path)
+            }
+            const format = new ol.format.GeoJSON();
+            const routeFeatures = format.writeFeaturesObject(allFeatures, {decimals: 1});
+            routeFeatures['bbox'] = this.bbox
+            // api.alert(str(routeFeatures.keys()))
+            console.log("routeFeatures", routeFeatures)
+
+            await writeFile(annotationPath, JSON.stringify(routeFeatures))
+            await this.saveConfig()
         },
         // Save annotations
         exportAnnotation() {
@@ -1758,6 +1766,68 @@ class ImJoyPlugin {
         app.getDataset = this.getDataset
         app.plugin = this
     }
+
+    async displaySample(sample){
+        console.log("doing it, really", sample.w, sample.h);
+        let extent = [0, 0, sample.w, sample.h];
+        this.bbox = [0, 0, sample.w - 1, sample.h - 1];
+        let projection = new Projection({
+            code: 'image',
+            units: 'pixels',
+            extent: extent
+        })
+        const image_source = new Static({
+            url: sample.url,
+            projection: projection,
+            imageExtent: extent,
+            crossOrigin: 'anonymous'
+        })
+        app.image_layer.setSource(image_source);
+        app.map.setView( new View({
+                   projection: projection,
+                   center: center || getCenter(extent),
+                   extent: extent,
+                   zoom: 2,
+                   maxZoom: 8
+               }))
+    }
+
+    async displayimage(segmentation_image){
+
+        let extent = [0, 0, segmentation_image.w, segmentation_image.h];
+        let projection = new Projection({
+            code: 'image',
+            units: 'pixels',
+            extent: extent
+        })
+        const image_source = new Static({
+            url: segmentation_image.url,
+            projection: projection,
+            imageExtent: extent,
+            crossOrigin: 'anonymous'
+        })
+
+        app.image_layer.setSource(image_source)
+
+        app.map.setView( new View({
+            projection: projection,
+            center: getCenter(extent),
+            extent: extent,
+            zoom: 2,
+            maxZoom: 8
+        }))
+    }
+
+    is_dirty(){
+        console.log("annotation_dirty", app.annotation_dirty)
+        return app.annotation_dirty
+    }
+
+    set_clean(){
+        app.annotation_dirty = false
+        console.log("set clean", app.annotation_dirty)
+    }
+
     async getDataset(){
         const filerted_dataset = {}
         for(let k in app.selected_dataset){
