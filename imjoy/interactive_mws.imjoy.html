@@ -122,22 +122,40 @@ class ImJoyPlugin():
         segmentation = interactive()
         print('mws done')
 
-        segmentation = np.stack(((segmentation % 255).astype(np.uint8),
-                                ((segmentation / 255) % 255).astype(np.uint8),
-                                ((segmentation / 255**2)% 255).astype(np.uint8)), axis=-1)
+        return segmentation
 
-        blend_image = segmentation
-        print('uniques' + str(np.unique(blend_image)))
-        print("blend_shape ", blend_image.shape)
+
+    async def blend(self, img, seg, seed_color_map):
+
+        seg_color = np.stack(((seg % 255).astype(np.uint8),
+                                ((seg / 255) % 255).astype(np.uint8),
+                                ((seg / 255**2)% 255).astype(np.uint8)), axis=-1)
+
+        for l in seed_color_map:
+            mask = seg==l
+            for c in range(3):
+                seg_color[..., c][mask] = seed_color_map[l][c]
+
+        img = np.repeat(img[:512, :512, None], 3, axis=-1)
+
+        #bending
+        blend = 0.6 * seg_color + 0.4 * img
+
+        return blend
+
+
+    async def displayimage(self, ann_window, img):
         name_plot = "/home/swolf/pictures/tmp.png"
-        imsave(name_plot, blend_image)
+        imsave(name_plot, img)
 
         with open(name_plot, 'rb') as f:
             result = base64.b64encode(f.read()).decode('ascii')
         imgurl = 'data:image/png;base64,' + result
-        return {'url': imgurl,
-                'w': segmentation.shape[0],
-                'h': segmentation.shape[1]}
+        ann_window.displayimage({'url': imgurl,
+                'w': img.shape[0],
+                'h': img.shape[1]})
+
+
 
     def init_mws(self):
         
@@ -165,8 +183,11 @@ class ImJoyPlugin():
                                      strides=[8, 8],
                                      randomize_strides=True)
 
+    def init_raw(self):
+        raw_path = "/home/swolf/local/data/hackathon2019/slice0.png"
+        img = imread(raw_path)
+        return img
         
-
 
     async def run(self, ctx):
         print("SEHR VIEL TEXT")
@@ -176,13 +197,16 @@ class ImJoyPlugin():
         loop = asyncio.get_event_loop()
 
         seed_name_map = {}
+        seed_color_map = {}
         max_label = 1
         centered = False
+
 
 
         with concurrent.futures.ThreadPoolExecutor() as pool:
 
             interactive = await loop.run_in_executor(pool, self.init_mws)
+            img = await loop.run_in_executor(pool, self.init_raw)
 
             counter = 0
             while True:
@@ -198,21 +222,25 @@ class ImJoyPlugin():
                         label = c_dict['properties']['label']
                         if label not in seed_name_map:
                             seed_name_map[label] = max_label
+                            seed_color_map[max_label] = 128 + 128 * np.random.rand(3)
                             max_label += 1
 
                         c_dict['properties']["name"] = str(seed_name_map[label])
 
                     print("coords ", coords)
 
-                    result = await loop.run_in_executor(
+                    segmentation = await loop.run_in_executor(
                         pool, self.update_segmentation, interactive, coords)
-                    
-                    await ann_window.displayimage(result)
+
+                    # alpha blending
+                    blend = await self.blend(img, segmentation, seed_color_map)
+                    await self.displayimage(ann_window, blend)
 
                     if not centered:
-                        await ann_window.centeronimage(result)
+                        await ann_window.centeronimage({'w': blend.shape[0],
+                                                        'h': blend.shape[1]})
                         centered = True
-                    
+
                     await ann_window.set_clean()
                 await asyncio.sleep(1)
 
