@@ -299,7 +299,7 @@ namespace segmentation {
 
         // get node labeling into output
         util::export_consecutive_labels(ufd, number_of_nodes, node_labeling);
-        
+
         for(size_t label = 0; label < number_of_nodes; ++label) {
             uint64_t root = ufd.find_set(label);
             semantic_labeling[label] = semantic_labeling[root];

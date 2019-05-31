@@ -167,6 +167,8 @@ namespace segmentation {
         for(size_t label = 0; label < number_of_labels; ++label) {
             node_labeling[label] = ufd.find_set(label);
         }
+
+        util::export_consecutive_labels(ufd, number_of_labels, node_labeling);
     }
 
 

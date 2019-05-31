@@ -393,7 +393,7 @@ size_t compute_zws_segmentation(const xt::xexpression<WEIGHTS> & edge_weights_ex
     n_labels = apply_size_filter(region_weights, n_labels,
                                  size_threshold, merge_threshold,
                                  labels_exp);
-    // std::cout << n_labels << " labels after size-filter" << std::endl;
+
     return n_labels;
 }
 

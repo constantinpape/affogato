@@ -81,8 +81,11 @@ namespace segmentation {
             labels[coord] = sets.find_set(labels[coord]);
         });
 
-        // FIXME this is not necessarily the correct max value !!!
-        return current_label;
+        // Finally, relabel consecutively
+        current_label = util::export_consecutive_labels(sets,
+                                                        current_label + 1,
+                                                        labels);
+        return current_label + 1;
     }
 }
 }
