@@ -106,7 +106,9 @@ class ImJoyPlugin():
         # TODO: use the actual model
 
         import h5py
-        with h5py.File("/home/swolf/local/data/hackathon2019/slice0.h5", "r") as h5file:
+        # aff_path = "/home/swolf/local/data/hackathon2019/slice0.h5"
+        aff_path = "/home/pape/Work/data/ilastik/mulastik/data/slice0.h5" 
+        with h5py.File(aff_path, "r") as h5file:
             prediction = h5file["data"][:]
 
         return prediction
@@ -143,9 +145,9 @@ class ImJoyPlugin():
 
         return blend
 
-
     async def displayimage(self, ann_window, img):
-        name_plot = "/home/swolf/pictures/tmp.png"
+        # name_plot = "/home/swolf/pictures/tmp.png"
+        name_plot = "/home/pape/Pictures/tmp.png"
         imsave(name_plot, img)
 
         with open(name_plot, 'rb') as f:
@@ -154,7 +156,6 @@ class ImJoyPlugin():
         ann_window.displayimage({'url': imgurl,
                 'w': img.shape[0],
                 'h': img.shape[1]})
-
 
 
     def init_mws(self):
@@ -178,19 +179,18 @@ class ImJoyPlugin():
                    [0, -27]]
 
         return InteractiveMWS(affs,
-                                     offsets,
-                                     n_attractive_channels=2,
-                                     strides=[8, 8],
-                                     randomize_strides=True)
+                              offsets,
+                              n_attractive_channels=2,
+                              strides=[8, 8],
+                              randomize_strides=True)
 
     def init_raw(self):
-        raw_path = "/home/swolf/local/data/hackathon2019/slice0.png"
+        # raw_path = "/home/swolf/local/data/hackathon2019/slice0.png"
+        raw_path = "/home/pape/Work/data/ilastik/mulastik/data/slice0.png"
         img = imread(raw_path)
         return img
         
-
     async def run(self, ctx):
-        print("SEHR VIEL TEXT")
         ann_window = await api.createWindow(type="MWSAnnotator", name="thiswindow", sandbox="allow-same-origin allow-scripts", data={})
         print("show_image ")
 
@@ -200,8 +200,6 @@ class ImJoyPlugin():
         seed_color_map = {}
         max_label = 1
         centered = False
-
-
 
         with concurrent.futures.ThreadPoolExecutor() as pool:
 
