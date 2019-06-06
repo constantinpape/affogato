@@ -8,6 +8,15 @@ except ImportError:
     WITH_SCIPY = False
 
 
+def compute_embedding_distances(values, offsets, norm='l2'):
+    if norm == 'l2':
+        return compute_embedding_distances_l2(values, offsets)
+    elif norm == 'cosine':
+        return compute_embedding_distances_cos(values, offsets)
+    else:
+        raise ValueError("Invalid norm %s" % norm)
+
+
 if WITH_SCIPY:
 
     def affinity_distance_transform(affinities, clip_limit_short=100., clip_limit_long=30):

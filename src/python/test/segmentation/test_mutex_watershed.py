@@ -95,5 +95,29 @@ class TestMutexWatershed(unittest.TestCase):
         self.assertTrue(np.allclose(edges1, edges2))
 
 
+    def test_mws_masked(self):
+        from affogato.segmentation import compute_mws_segmentation
+        number_of_attractive_channels = 2
+        offsets = [[-1, 0], [0, -1], [-3, 0], [0, 3], [5, 5]]
+
+        weights = np.random.rand(len(offsets), 100, 100)
+        mask = np.ones((100, 100), dtype='bool')
+        # exclude 10 % of pixel from foreground mask
+        coords = np.where(mask)
+        n_out = int(len(coords[0]) * .1)
+        indices = np.random.permutation(len(coords[0]))[:n_out]
+        coords = (coords[0][indices], coords[1][indices])
+        mask[coords] = False
+
+        node_labels = compute_mws_segmentation(weights, offsets,
+                                               number_of_attractive_channels,
+                                               mask=mask)
+        self.assertEqual(weights.shape[1:], node_labels.shape)
+        # make sure mask is all non-zero
+        self.assertTrue((node_labels[mask] != 0).all())
+        # make sure inv mask is all zeros
+        self.assertTrue((node_labels[np.logical_not(mask)] == 0).all())
+
+
 if __name__ == '__main__':
     unittest.main()
