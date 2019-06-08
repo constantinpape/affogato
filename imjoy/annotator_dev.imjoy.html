@@ -1663,6 +1663,18 @@ const app = new Vue({
             }, with_images)
             api.showMessage('The dataset is successfully uploaded')
         },
+        async clearAnnotation(){
+            if (this.vector_source) {
+                const features = this.select.getFeatures()
+                if(features.getLength()>0){
+                    features.forEach((feature)=>{
+                        console.log('removing ', feature)
+                        this.vector_source.removeFeature(feature);
+                        this.select.getFeatures().remove(feature);
+                    });
+                }
+            }
+        },
         // Clear window
         async deleteAnnotation() {
             if (this.vector_source) {
@@ -1799,7 +1811,7 @@ class ImJoyPlugin {
             units: 'pixels',
             extent: extent
         })
-        
+
         app.map.setView( new View({
             projection: projection,
             center: getCenter(extent),
