@@ -209,7 +209,7 @@ PYBIND11_MODULE(_segmentation, m)
         //
 
         .def("update_seeds", [](GraphType & self,
-                            const xt::pyarray<uint64_t> & seeds){
+                                const xt::pyarray<uint64_t> & seeds){
             self.update_seeds(seeds);
         }, py::arg("seeds"))
         .def("clear_seeds", &GraphType::clear_seeds)

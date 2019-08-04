@@ -1,11 +1,49 @@
+# import os
 import numpy as np
+import h5py
 import napari
 from ...segmentation import InteractiveMWS
+
+
+def _print_help():
+    print("Interactive Mutex Watershed Application")
+    print("Keybindigns:")
+    print("[u] update segmentation")
+    print("[s] save current segmentation to h5")
+    print("[v] save current seeds to h5")
+    print("[h] show help")
+
+
+# TODO with auto completion
+# https://stackoverflow.com/questions/5637124/tab-completion-in-pythons-raw-input
+# https://gist.github.com/iamatypeofwalrus/5637895
+def _read_file_path(path):
+    if path is not None:
+        inp = input("Do you want to keep the save path and override the result? [y] / n: ")
+        if inp != 'n':
+            return path
+    path = input("Enter save path: ")
+    # TODO check for valid save folder
+    # save_folder = os.path.split(path)[0]
+    # if not os.path.exists(save_folder):
+    #     raise RuntimeError("Invalid folder %s" % save_folder)
+    return path
+
+
+def _save(path, data):
+    # TODO don't use 'w', but check if data exists instead
+    with h5py.File(path, 'w') as f:
+        f.create_dataset('data', data=data, compression='gzip')
 
 
 def napari_mws_2d(raw, imws):
     # get the initial mws segmentation
     seg = imws()
+
+    # initialize save paths for segmentation and seeds
+    seg_path = None
+    seed_path = None
+    _print_help()
 
     # add initial layers to the viewer
     with napari.gui_qt():
@@ -36,27 +74,26 @@ def napari_mws_2d(raw, imws):
             seg_layer.data = seg
             seg_layer.refresh()
 
-        # update random colors of segmentation layer
-        @viewer.bind_key('c')
-        def update_random_colors(viewer):
-            print("Update random colors")
-            seg_layer = viewer.layers['segmentation']
-            # TODO
-
         # save the current segmentation
         @viewer.bind_key('s')
         def save_segmentation(viewer):
-            pass
+            nonlocal seg_path
+            seg_path = _read_file_path(seg_path)
+            seg = viewer.layers['segmentation'].data
+            _save(seg_path, seg)
 
         # save the current seeds
         @viewer.bind_key('v')
-        def save_segmentation(viewer):
-            pass
+        def save_seeds(viewer):
+            nonlocal seed_path
+            seed_path = _read_file_path(seed_path)
+            seeds = viewer.layers['seeds'].data
+            _save(seed_path, seeds)
 
         # display help
         @viewer.bind_key('h')
         def print_help(viewer):
-            pass
+            _print_help()
 
 
 # TODO enable with seeds
