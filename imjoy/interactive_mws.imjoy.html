@@ -1,0 +1,29 @@
+<docs lang = "markdown">
+[TODO: write documentation for this plugin.]
+</docs>
+
+<config lang = "json">
+{
+    "name": "MWS Interactive",
+    "type": "native-python",
+    "version": "0.1.0",
+    "description": "[TODO: describe this plugin with one sentence.]",
+    "tags": [],
+    "ui": "",
+    "cover": "",
+    "inputs": null,
+    "outputs": null,
+    "flags": [],
+    "icon": "extension",
+    "api_version": "0.1.5",
+    "env": "conda create -n mws-cpu python=3.7",
+    "requirements": ["conda: -c cpape -c conda-forge h5py affogato==0.1.3 scikit-image vigra pillow"],
+    "dependencies": []
+}
+</config>
+
+
+<script lang = "python">
+from affogato.imjoy import ImJoyPlugin()
+api.export(ImJoyPlugin())
+</script>

@@ -1,0 +1,18 @@
+{
+    "name": "MWS Interactive",
+    "type": "native-python",
+    "version": "0.1.0",
+    "description": "[TODO: describe this plugin with one sentence.]",
+    "tags": [],
+    "ui": "",
+    "cover": "",
+    "inputs": null,
+    "outputs": null,
+    "flags": [],
+    "icon": "extension",
+    "api_version": "0.1.5",
+    "env": "conda create -n mws-cpu python=3.7",
+    "requirements": ["conda: -c cpape -c conda-forge h5py affogato scikit-image vigra"],
+    "dependencies": [],
+    "uri": "imjoy/interactive_mws.html"
+}

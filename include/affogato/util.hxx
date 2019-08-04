@@ -133,5 +133,22 @@ namespace util {
         }
     }
 
+    template<typename UFD, typename NUM, typename NODE_ARRAY>
+    inline uint64_t export_consecutive_labels(UFD & ufd, const NUM & number_of_nodes, NODE_ARRAY & node_labeling) {
+        std::unordered_map<uint64_t, uint64_t> labelmap;
+        for(size_t label = 0; label < number_of_nodes; ++label) {
+            const uint64_t root = ufd.find_set(label);
+            auto iter = labelmap.find(root);
+            if (iter != labelmap.end()){
+                node_labeling[label] = iter->second;
+            } else {
+                uint64_t newlabel = labelmap.size() + 1;
+                labelmap[root] = newlabel;
+                node_labeling[label] = newlabel;
+            }
+        }
+        return labelmap.size();
+    }
+
 }
 }

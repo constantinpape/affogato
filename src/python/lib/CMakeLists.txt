@@ -41,13 +41,10 @@ macro(addPythonModule)
     set(multiValueArgs SOURCES LIBRRARIES)
     cmake_parse_arguments(ADD_PY_MOD "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
-    #message(STATUS "BRAAA"  ${ADD_PY_MOD_NESTED_NAME})
-
     # get name of the module
     string(REPLACE "/" ";" MOD_NESTING_LIST "${ADD_PY_MOD_NESTED_NAME}")
     list(LENGTH MOD_NESTING_LIST nesting_len)
     LIST(GET MOD_NESTING_LIST ${LENGTH}-1 MODULE_NAME)
-
 
     #Create the binding library
     pybind11_add_module(_${MODULE_NAME}
@@ -59,9 +56,6 @@ macro(addPythonModule)
     endif()
     #endif()
     set_target_properties(_${MODULE_NAME}  PROPERTIES PREFIX "")
-
-    #message(STATUS ********Module: ${MODULE_NAME})
-    #message(STATUS ********Libs: ${ADD_PY_MOD_LIBRRARIES})
 
     # link additional libraries
     target_link_libraries(_${MODULE_NAME}
