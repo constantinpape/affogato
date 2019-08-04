@@ -363,7 +363,7 @@ namespace segmentation {
 
             // if we have seeds, insert all edges between the seeds
             if(_seeded_nodes.size()) {
-                update_edges_from_seeds(uv_ids, weights);
+                update_edges_from_seeds(uv_ids, weights, fraction);
             }
         }
 
@@ -393,7 +393,8 @@ namespace segmentation {
         }
 
         inline void update_edges_from_seeds(std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
-                                            std::vector<float> & weights) const {
+                                            std::vector<float> & weights,
+                                            const double fraction=1.) const {
             // get the seeded node ids from the _seeded_nodes
             std::vector<uint64_t> node_ids(_seeded_nodes.size());
             std::size_t id = 0;
@@ -402,30 +403,56 @@ namespace segmentation {
                 ++id;
             }
 
+            // look up in vector of pair is to expensive, so we use an
+            // unordered map as helper here
+            std::unordered_map<std::pair<uint64_t, uint64_t>,
+                               std::size_t,
+                               boost::hash<std::pair<uint64_t, uint64_t>>> uv_helper;
+            for(std::size_t ii = 0; ii < uv_ids.size(); ++ii) {
+                uv_helper[uv_ids[ii]] = ii;
+            }
+            std::size_t max_edge_id = uv_ids.size() - 1;
+
+            // random number generator
+            std::default_random_engine generator;
+            std::uniform_real_distribution<float> distribution;
+            auto draw = std::bind(distribution, generator);
+
             // iterate over the cartesian product of the seeded ids and insert
             // edges according to the seed states
             for(std::size_t i = 0; i < node_ids.size(); ++i) {
                 for(std::size_t j = i + 1; j < node_ids.size(); ++j) {
-                    //
+
+                    // get the node ids and edge id of this pair
                     uint64_t u = node_ids[i];
                     uint64_t v = node_ids[j];
                     if(u > v) {
                         std::swap(u, v);
                     }
-
-                    const uint64_t sU = _seeded_nodes.at(u);
-                    const uint64_t sV = _seeded_nodes.at(v);
-                    // are we in the same or in different seeds
-                    const float w = (sU == sV) ? _same_seed_weight : _different_seed_weight;
+                    const auto uv = std::make_pair(u, v);
 
                     // check if we have this edge already
-                    auto uv = std::make_pair(u, v);
-                    auto edge_it = std::find(uv_ids.begin(), uv_ids.end(), uv);
-                    if(edge_it != uv_ids.end()) {
-                        weights[std::distance(uv_ids.begin(), edge_it)] = w;
+                    auto edge_it = uv_helper.find(uv);
+                    const bool have_edge = edge_it != uv_helper.end();
+
+                    // if not, only keep random fraction of new edges
+                    if(!have_edge && draw() > fraction) {
+                        return;
+                    }
+
+                    // compute the weight
+                    const uint64_t sU = _seeded_nodes.at(u);
+                    const uint64_t sV = _seeded_nodes.at(v);
+                    // are we in the same or in different seeds?
+                    const float w = (sU == sV) ? _same_seed_weight : _different_seed_weight;
+
+                    if(have_edge) {
+                        weights[edge_it->second] = w;
                     } else {
                         uv_ids.emplace_back(u, v);
                         weights.emplace_back(w);
+                        ++max_edge_id;
+                        uv_helper[uv] = max_edge_id;
                     }
                 }
             }
