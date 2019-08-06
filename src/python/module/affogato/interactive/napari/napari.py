@@ -36,80 +36,94 @@ def _save(path, data):
         f.create_dataset('data', data=data, compression='gzip')
 
 
-def napari_mws_2d(raw, imws):
-    # get the initial mws segmentation
-    seg = imws()
+class InteractiveNapariMWS:
 
-    # initialize save paths for segmentation and seeds
-    seg_path = None
-    seed_path = None
-    _print_help()
+    def __init__(self,
+                 raw,
+                 affs,
+                 offsets,
+                 strides=None,
+                 randomize_strides=True):
 
-    # add initial layers to the viewer
-    with napari.gui_qt():
-        viewer = napari.Viewer()
+        ndim = len(offsets[0])
+        assert raw.ndim == ndim
+        assert affs.ndim == ndim + 1
+        assert ndim in (2, 3)
 
-        # add image layers and point layer for seeds
-        viewer.add_image(raw, name='raw')
-        viewer.add_labels(seg, name='segmentation')
-        viewer.add_labels(np.zeros_like(seg), name='seeds')
+        self.raw = raw
+        self.imws = InteractiveMWS(affs, offsets, n_attractive_channels=ndim,
+                                   strides=strides, randomize_strides=randomize_strides)
 
-        # add key-bindings
+        self.run()
 
-        # update segmentation by re-running mws
-        @viewer.bind_key('u')
-        def update_mws(viewer):
-            print("Update mws triggered")
-            layers = viewer.layers
-            seeds = layers['seeds'].data
-            seg_layer = layers['segmentation']
-            print("Clearing seeds ...")
-            imws.clear_seeds()
-            # FIXME this takes much to long, something is wrong here
-            print("Updating seeds ...")
-            imws.update_seeds(seeds)
-            print("Recomputing segmentation from seeds ...")
-            seg = imws()
-            print("... done")
-            seg_layer.data = seg
-            seg_layer.refresh()
+    def run(self):
+        # get the initial mws segmentation
+        seg = self.imws()
 
-        # save the current segmentation
-        @viewer.bind_key('s')
-        def save_segmentation(viewer):
-            nonlocal seg_path
-            seg_path = _read_file_path(seg_path)
-            seg = viewer.layers['segmentation'].data
-            _save(seg_path, seg)
+        # initialize save paths for segmentation and seeds
+        seg_path = None
+        seed_path = None
+        _print_help()
 
-        # save the current seeds
-        @viewer.bind_key('v')
-        def save_seeds(viewer):
-            nonlocal seed_path
-            seed_path = _read_file_path(seed_path)
-            seeds = viewer.layers['seeds'].data
-            _save(seed_path, seeds)
+        # add initial layers to the viewer
+        with napari.gui_qt():
+            viewer = napari.Viewer()
 
-        # display help
-        @viewer.bind_key('h')
-        def print_help(viewer):
-            _print_help()
+            # add image layers and point layer for seeds
+            viewer.add_image(self.raw, name='raw')
+            viewer.add_labels(seg, name='segmentation')
+            viewer.add_labels(np.zeros_like(seg), name='seeds')
+
+            # add key-bindings
+
+            # update segmentation by re-running mws
+            @viewer.bind_key('u')
+            def update_mws(viewer):
+                self.update_mws_impl(viewer)
+
+            # save the current segmentation
+            @viewer.bind_key('s')
+            def save_segmentation(viewer):
+                nonlocal seg_path
+                seg_path = _read_file_path(seg_path)
+                seg = viewer.layers['segmentation'].data
+                _save(seg_path, seg)
+
+            # save the current seeds
+            @viewer.bind_key('v')
+            def save_seeds(viewer):
+                nonlocal seed_path
+                seed_path = _read_file_path(seed_path)
+                seeds = viewer.layers['seeds'].data
+                _save(seed_path, seeds)
+
+            # save the current seeds
+            @viewer.bind_key('t')
+            def training_step(viewer):
+                self.training_step_impl(viewer)
+
+            # display help
+            @viewer.bind_key('h')
+            def print_help(viewer):
+                _print_help()
 
 
-# TODO enable with seeds
-def interactive_napari_mws(raw, affs, offsets,
-                           strides=None, randomize_strides=False):
-    ndim = len(offsets[0])
-    assert raw.ndim == ndim
-    assert affs.ndim == ndim + 1
-    assert ndim in (2, 3)
+    def training_step_impl(self, viewer):
+        pass
 
-    imws = InteractiveMWS(affs, offsets, n_attractive_channels=ndim,
-                          strides=strides, randomize_strides=randomize_strides)
+    def update_mws_impl(self, viewer):
+        print("Update mws triggered")
+        layers = viewer.layers
+        seeds = layers['seeds'].data
 
-    if ndim == 2:
-        napari_mws_2d(raw, imws)
-    else:
-        assert False
-        # TODO implement 3d
-        # napari_mws_3d()
+        seg_layer = layers['segmentation']
+        print("Clearing seeds ...")
+        self.imws.clear_seeds()
+        # FIXME this takes much to long, something is wrong here
+        print("Updating seeds ...")
+        self.imws.update_seeds(seeds)
+        print("Recomputing segmentation from seeds ...")
+        seg = self.imws()
+        print("... done")
+        seg_layer.data = seg
+        seg_layer.refresh()

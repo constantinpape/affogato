@@ -1,1 +1,1 @@
-from .napari import interactive_napari_mws
+from .napari import InteractiveNapariMWS

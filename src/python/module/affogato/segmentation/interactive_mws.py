@@ -99,6 +99,14 @@ class InteractiveMWS():
     def unlock_seeds(self, unlock_seeds):
         self._locked_seeds.difference_update(unlock_seeds)
 
+    @property
+    def affinities(self):
+        return self._affinities
+
+    @affinities.setter
+    def affinities(self, affs):
+        self._affinities = affs
+    
     #
     # tiktorch functionality
     #

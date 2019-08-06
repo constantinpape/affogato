@@ -1,5 +1,5 @@
 import h5py
-from affogato.interactive.napari import interactive_napari_mws
+from affogato.interactive.napari import InteractiveNapariMWS
 
 
 def interactive_napari():
@@ -12,8 +12,9 @@ def interactive_napari():
     strides = [4, 4]
     offsets = [[-1, 0], [0, -1], [-3, 0], [0, -3],
                [-9, 0], [0, -9], [-27, 0], [0, -27]]
-    interactive_napari_mws(raw, affs, offsets,
-                           strides=strides, randomize_strides=True)
+
+    imws = InteractiveNapariMWS(raw, affs, offsets,
+                               strides=strides, randomize_strides=True)
 
 
 if __name__ == '__main__':
