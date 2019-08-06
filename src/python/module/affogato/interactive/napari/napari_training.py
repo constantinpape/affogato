@@ -1,7 +1,9 @@
 import numpy as np
 from .napari import InteractiveNapariMWS
 from ...segmentation import InteractiveMWS
-
+from tiktorch.types import Model
+from os import path
+import yaml
 
 class TrainableNapariMWS(InteractiveNapariMWS):
 
@@ -12,10 +14,12 @@ class TrainableNapariMWS(InteractiveNapariMWS):
                  strides=None,
                  randomize_strides=True):
 
+        self.seg_ids = None
+        self.offsets = offsets
+
         # initialize network
         self.model = self.initialize_model(checkpoint)
         affs = self.compute_affinities(raw)
-        self.seg_ids = None
 
         super().__init__(raw,
                          affs,
@@ -24,8 +28,16 @@ class TrainableNapariMWS(InteractiveNapariMWS):
                          randomize_strides=randomize_strides)
 
     def initialize_model(self, checkpoint):
-        # TODO
-        return None
+        code = open(path.join(checkpoint, "model.py"), 'rb').read()
+        conf_file = path.join(checkpoint, "tiktorch_config.yml")
+        with open(conf_file) as stream:
+            conf = yaml.safe_load(stream)
+
+        self.training_shape = conf['training']["training_shape"]
+
+        conf["model_init_kwargs"]["out_channels"] = len(self.offsets)
+
+        return Model(code=code, config=conf)
 
     def compute_affinities(self, raw):
         affs = None
