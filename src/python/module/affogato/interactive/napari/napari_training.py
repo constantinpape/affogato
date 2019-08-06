@@ -1,9 +1,19 @@
 import numpy as np
 from .napari import InteractiveNapariMWS
 from ...segmentation import InteractiveMWS
-from tiktorch.types import Model
+from tiktorch.types import Model, ModelState
 from os import path
+import torch
 import yaml
+from tiktorch.launcher import LocalServerLauncher, RemoteSSHServerLauncher, SSHCred, wait
+from tiktorch.rpc import Client, TCPConnConf
+from tiktorch.rpc_interface import INeuralNetworkAPI
+
+
+def read_bytes(filename):
+    with open(filename, "rb") as file:
+        return file.read()
+
 
 class TrainableNapariMWS(InteractiveNapariMWS):
 
@@ -30,14 +40,34 @@ class TrainableNapariMWS(InteractiveNapariMWS):
     def initialize_model(self, checkpoint):
         code = open(path.join(checkpoint, "model.py"), 'rb').read()
         conf_file = path.join(checkpoint, "tiktorch_config.yml")
-        with open(conf_file) as stream:
-            conf = yaml.safe_load(stream)
+        state_file = path.join(checkpoint, "state_8.nn")
+        srv_file = path.join(checkpoint, "server.yml")
+        conf = yaml.safe_load(read_bytes(conf_file))
 
         self.training_shape = conf['training']["training_shape"]
 
         conf["model_init_kwargs"]["out_channels"] = len(self.offsets)
 
-        return Model(code=code, config=conf)
+        server_conf = yaml.safe_load(read_bytes(srv_file))
+
+        conn_conf = TCPConnConf(server_conf['ip'],
+                                server_conf['port0'],
+                                server_conf['port1'],
+                                timeout=20)
+
+        cred = SSHCred(server_conf['user'],
+                       key_path=server_conf['key_file'])
+        launcher = RemoteSSHServerLauncher(conn_conf, cred=cred)
+        launcher.start()
+
+        client = Client(INeuralNetworkAPI(), conn_conf)
+        state = read_bytes(state_file)
+
+        client.load_model(Model(code=code, config=conf),
+                          state=ModelState(model_state=state),
+                          devices=[server_conf['device']])
+
+        return client
 
     def compute_affinities(self, raw):
         affs = None
