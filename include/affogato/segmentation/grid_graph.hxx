@@ -25,8 +25,9 @@ namespace segmentation {
                                                               _n_nodes(std::accumulate(shape.begin(),
                                                                                        shape.end(),
                                                                                        1, std::multiplies<std::size_t>())),
-                                                              _same_seed_weight(0.),
-                                                              _different_seed_weight(0.){
+                                                              _add_attractive_seed_edges(true),
+                                                              _attractive_seed_weight(1.2),
+                                                              _repulsive_seed_weight(1.1){
             init_strides();
         }
 
@@ -67,21 +68,14 @@ namespace segmentation {
             _seeded_nodes.clear();
         }
 
-        inline float get_same_seed_weight() const {
-            return _same_seed_weight;
+        inline void set_add_attactive_seed_edges(const bool val) {
+            _add_attractive_seed_edges = val;
         }
 
-        inline void set_same_seed_weight(const float weight) {
-            _same_seed_weight = weight;
+        inline bool get_add_attactive_seed_edges() const {
+            return _add_attractive_seed_edges;
         }
 
-        inline float get_different_seed_weight() const {
-            return _different_seed_weight;
-        }
-
-        inline void set_different_seed_weight(const float weight) {
-            _different_seed_weight = weight;
-        }
 
         //
         //
@@ -334,7 +328,11 @@ namespace segmentation {
 
             // if we have seeds, insert all edges between the seeds
             if(_seeded_nodes.size()) {
-                update_edges_from_seeds(uv_ids, weights);
+                if(_add_attractive_seed_edges) {
+                    update_attractive_edges_from_seeds(uv_ids, weights);
+                } else {
+                    update_repulsive_edges_from_seeds(uv_ids, weights);
+                }
             }
         }
 
@@ -363,7 +361,11 @@ namespace segmentation {
 
             // if we have seeds, insert all edges between the seeds
             if(_seeded_nodes.size()) {
-                update_edges_from_seeds(uv_ids, weights, fraction);
+                if(_add_attractive_seed_edges) {
+                    update_attractive_edges_from_seeds(uv_ids, weights);
+                } else {
+                    update_repulsive_edges_from_seeds(uv_ids, weights);
+                }
             }
         }
 
@@ -388,83 +390,60 @@ namespace segmentation {
 
             // if we have seeds, insert all edges between the seeds
             if(_seeded_nodes.size()) {
-                update_edges_from_seeds(uv_ids, weights);
-            }
-        }
-
-        inline void update_edges_from_seeds(std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
-                                            std::vector<float> & weights,
-                                            const double fraction=1.) const {
-            // get the seeded node ids from the _seeded_nodes
-            std::vector<uint64_t> node_ids(_seeded_nodes.size());
-            std::size_t id = 0;
-            for(const auto & seedPair : _seeded_nodes) {
-                node_ids[id] = seedPair.first;
-                ++id;
-            }
-
-            // look up in vector of pair is to expensive, so we use an
-            // unordered map as helper here
-            std::unordered_map<std::pair<uint64_t, uint64_t>,
-                               std::size_t,
-                               boost::hash<std::pair<uint64_t, uint64_t>>> uv_helper;
-            for(std::size_t ii = 0; ii < uv_ids.size(); ++ii) {
-                uv_helper[uv_ids[ii]] = ii;
-            }
-            std::size_t max_edge_id = uv_ids.size() - 1;
-
-            // random number generator
-            std::default_random_engine generator;
-            std::uniform_real_distribution<float> distribution;
-            auto draw = std::bind(distribution, generator);
-
-            // iterate over the cartesian product of the seeded ids and insert
-            // edges according to the seed states
-            for(std::size_t i = 0; i < node_ids.size(); ++i) {
-                for(std::size_t j = i + 1; j < node_ids.size(); ++j) {
-
-                    // get the node ids and edge id of this pair
-                    uint64_t u = node_ids[i];
-                    uint64_t v = node_ids[j];
-                    if(u > v) {
-                        std::swap(u, v);
-                    }
-                    const auto uv = std::make_pair(u, v);
-
-                    // check if we have this edge already
-                    auto edge_it = uv_helper.find(uv);
-                    const bool have_edge = edge_it != uv_helper.end();
-
-                    // if not, only keep random fraction of new edges
-                    if(!have_edge && draw() > fraction) {
-                        return;
-                    }
-
-                    // compute the weight
-                    const uint64_t sU = _seeded_nodes.at(u);
-                    const uint64_t sV = _seeded_nodes.at(v);
-                    // are we in the same or in different seeds?
-                    const float w = (sU == sV) ? _same_seed_weight : _different_seed_weight;
-
-                    if(have_edge) {
-                        weights[edge_it->second] = w;
-                    } else {
-                        uv_ids.emplace_back(u, v);
-                        weights.emplace_back(w);
-                        ++max_edge_id;
-                        uv_helper[uv] = max_edge_id;
-                    }
+                if(_add_attractive_seed_edges) {
+                    update_attractive_edges_from_seeds(uv_ids, weights);
+                } else {
+                    update_repulsive_edges_from_seeds(uv_ids, weights);
                 }
             }
         }
 
+        inline void update_attractive_edges_from_seeds(std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
+                                                       std::vector<float> & weights) const {
+            for(const auto & seeded_node: _seeded_nodes ) {
+                const uint64_t seed_id = seeded_node.second;
+                uint64_t u = seeded_node.first;
+                uint64_t v = _seed_representatives.at(seed_id);
+
+                // don't add self-edge
+                if(u == v) {
+                    continue;
+                }
+                if(u > v) {
+                    std::swap(u, v);
+                }
+                uv_ids.emplace_back(u, v);
+                weights.emplace_back(_attractive_seed_weight);
+            }
+        }
+
+        inline void update_repulsive_edges_from_seeds(std::vector<std::pair<uint64_t, uint64_t>> & uv_ids,
+                                                      std::vector<float> & weights) const {
+            for(const auto & seed_a: _seed_representatives) {
+                for(const auto & seed_b: _seed_representatives) {
+                    const uint64_t id_a = seed_a.first;
+                    const uint64_t id_b = seed_b.first;
+                    if(id_a >= id_b) {
+                        continue;
+                    }
+
+                    uint64_t u = seed_a.second;
+                    uint64_t v = seed_b.second;
+
+                    if(u > v) {
+                        std::swap(u, v);
+                    }
+                    uv_ids.emplace_back(u, v);
+                    weights.emplace_back(_repulsive_seed_weight);
+
+                }
+            }
+        }
 
     private:
         xt::xindex _shape;
         unsigned _ndim;
         std::size_t _n_nodes;
-        float _same_seed_weight;
-        float _different_seed_weight;
         xt::xindex _strides;
 
         // data structures for masks
@@ -474,6 +453,10 @@ namespace segmentation {
         std::unordered_map<uint64_t, uint64_t> _seeded_nodes;
         std::set<uint64_t> _seed_ids;
         std::unordered_map<uint64_t, uint64_t> _seed_representatives;
+
+        bool _add_attractive_seed_edges;
+        float _attractive_seed_weight;
+        float _repulsive_seed_weight;
     };
 
 
