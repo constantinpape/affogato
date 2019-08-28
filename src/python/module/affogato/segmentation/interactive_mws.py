@@ -118,6 +118,7 @@ class InteractiveMWS():
         if affinities.shape[0] != len(self._offsets):
             raise ValueError("Invalid number of channels")
         self._affinities = affinities
+        self._update_graph()
 
     # TODO return the locked segments
     def get_locked_segments(self):

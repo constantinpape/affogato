@@ -5,7 +5,7 @@ output_axis_order: cxy
 # tiktorch config
 torch_version: 0.4.1.post2
 model_class_name: DUNet2D
-model_init_kwargs: {in_channels: 1, out_channels: 8}
+model_init_kwargs: {in_channels: 1, out_channels: 8, use_sigmoid: true}
 halo: [0, 0, 0]
 training:
   batch_size: 1

@@ -72,6 +72,7 @@ class InteractiveNapariMWS:
             # add image layers and point layer for seeds
             viewer.add_image(self.raw, name='raw')
             viewer.add_labels(seg, name='segmentation')
+            viewer.add_image(self.imws.affinities, name='affinities')
             viewer.add_labels(np.zeros_like(seg), name='seeds')
 
             # add key-bindings

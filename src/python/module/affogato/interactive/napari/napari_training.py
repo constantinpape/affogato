@@ -8,7 +8,7 @@ import yaml
 from tiktorch.launcher import LocalServerLauncher, RemoteSSHServerLauncher, SSHCred, wait
 from tiktorch.rpc import Client, TCPConnConf
 from tiktorch.rpc_interface import INeuralNetworkAPI
-
+from tiktorch.types import NDArray
 
 def read_bytes(filename):
     with open(filename, "rb") as file:
@@ -29,7 +29,10 @@ class TrainableNapariMWS(InteractiveNapariMWS):
 
         # initialize network
         self.model = self.initialize_model(checkpoint)
+        print("Computing Affinities")
         affs = self.compute_affinities(raw)
+
+        print("Starting InteractiveNapariMWS")
 
         super().__init__(raw,
                          affs,
@@ -40,7 +43,7 @@ class TrainableNapariMWS(InteractiveNapariMWS):
     def initialize_model(self, checkpoint):
         code = open(path.join(checkpoint, "model.py"), 'rb').read()
         conf_file = path.join(checkpoint, "tiktorch_config.yml")
-        state_file = path.join(checkpoint, "state_8.nn")
+        state_file = path.join(checkpoint, "state_dict.nn")
         srv_file = path.join(checkpoint, "server.yml")
         conf = yaml.safe_load(read_bytes(conf_file))
 
@@ -53,7 +56,7 @@ class TrainableNapariMWS(InteractiveNapariMWS):
         conn_conf = TCPConnConf(server_conf['ip'],
                                 server_conf['port0'],
                                 server_conf['port1'],
-                                timeout=20)
+                                timeout=200)
 
         cred = SSHCred(server_conf['user'],
                        key_path=server_conf['key_file'])
@@ -70,9 +73,8 @@ class TrainableNapariMWS(InteractiveNapariMWS):
         return client
 
     def compute_affinities(self, raw):
-        affs = None
-        # TODO: add network computation here
-        return affs
+        affs = self.model.forward(NDArray(raw[None]))
+        return affs.result().as_numpy()
 
     def training_step_impl(self, viewer):
         # TODO

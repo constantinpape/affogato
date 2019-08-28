@@ -1,0 +1,110 @@
+device: cuda
+
+trainer:
+  optimizer: 
+    Adam:
+      lr: 0.001
+      betas: [0.5, 0.999]
+
+  # metric
+  max_epochs: 1000
+  max_iterations: 1000000000
+  num_targets: 1
+
+  intervals:
+    save_every: [500, 'iterations']
+    validate_every: 
+      frequency : 'never'
+
+  tensorboard:
+    log_scalars_every: [1, 'iteration']
+    log_images_every: [1000, 'iteration']
+
+  callbacks:
+    scheduling:
+      AutoLR:
+        factor: 0.99998
+        patience: '1000 iterations'
+
+      SaveModelRegularly:
+        frequency: [100, 'iterations']
+
+      # GarbageCollection:
+      #   noargs : 0
+
+    gradients:
+      LogOutputGradients:
+        frequency: 100
+
+    # tqdm:
+    #   TQDMProgressBar:
+    #     noargs : 0
+
+loader:
+  dataset:
+    train.AffinityDataset:
+      data_file: "/export/home/swolf/local/data/mulastik/data.h5"
+
+  num_workers: 10
+  batch_size: 8
+  shuffle: true
+  timeout: 10000
+
+
+training:
+  checkpoint_every: 1000
+  validate_every: 100
+  num_epochs: 10000
+
+visualization:
+  dump_images_every: 1000
+
+model:
+  dunet_transfair.model.DUNet2D:
+    # import_from: "/export/home/swolf/local/src/affogato/example/data/AffinityUnet/model.py"
+    in_channels: 1
+    out_channels: 8
+    use_sigmoid: true
+
+
+criterion:
+  # torch.nn.MSELoss:
+  torch.nn.SmoothL1Loss:
+    reduction: 'mean'
+  
+firelight:
+  visualization_grid:
+    ImageGridVisualizer:
+      # visualizers:
+      #   - RiffleVisualizer:
+      input_mapping:
+        global: [B: 0, D: ':']
+        input: ['inputs', index: 0]
+        prediction: 'prediction'  # this needs to be here in order for the global slicing to be applied
+        target: 'target'
+
+      # riffle_dim: 'C'
+      row_specs: ['H', 'B', 'S', 'V']
+      column_specs: ['W', 'D', 'C']
+     # row_specs=('H', 'C', 'V'), column_specs=('W', 'D', 'T', 'B') 
+      visualizers:
+        # visualize raw input
+        # - InputVisualizer:
+        #     cmap: gray
+
+        # visualize raw input
+        - StackVisualizer:
+            # color_jointly: ["S", "H", "W"]
+            colorize: True
+            cmap: inferno
+
+            visualizers: 
+              - TargetVisualizer:
+                  colorize: False
+              # visualize segmentation predictions
+              - PredictionVisualizer:
+                  colorize: False
+
+        - MSEVisualizer:
+            cmap: inferno
+

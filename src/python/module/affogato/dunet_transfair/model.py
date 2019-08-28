@@ -187,7 +187,8 @@ class DUNetSkeleton(nn.Module):
 
 
 class DUNet2D(DUNetSkeleton):
-    def __init__(self, in_channels, out_channels, N=16, return_hypercolumns=False):
+    def __init__(self, in_channels, out_channels, N=16, return_hypercolumns=False,
+                        use_sigmoid=False):
         # Build encoders
         encoders = [
             Encoder([in_channels], N, 3),
@@ -205,7 +206,7 @@ class DUNet2D(DUNetSkeleton):
         # Build output
         output = Output([in_channels, N, 2 * N, 4 * N, 4 * N, 2 * N, N, N], out_channels, 3)
         # Parse final activation
-        final_activation = nn.Sigmoid() if out_channels == 1 else nn.Softmax2d()
+        final_activation = nn.Sigmoid() if (out_channels == 1 or use_sigmoid) else nn.Softmax2d()
         # dundundun
         super(DUNet2D, self).__init__(encoders=encoders,
                                       decoders=decoders,
@@ -228,6 +229,7 @@ class DUNet2D(DUNetSkeleton):
             b, c, _0, _1 = list(output.size())
             output = output.view(b, c, 1, _0, _1)
         return output
+
 
 if __name__ == "__main__":
     model = DUNet2D(1, 1)

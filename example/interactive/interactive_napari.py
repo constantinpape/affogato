@@ -5,6 +5,7 @@ from affogato.interactive.napari import InteractiveNapariMWS
 def interactive_napari():
     z = 0
     path = '/home/pape/Work/data/ilastik/mulastik/data/data.h5'
+    path = '/home/swolf/local/data/mulastik/data.h5'
     with h5py.File(path, 'r') as f:
         raw = f['raw'][z]
         affs = f['prediction'][:, z]
