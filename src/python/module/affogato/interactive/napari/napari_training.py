@@ -80,6 +80,9 @@ class TrainableNapariMWS(InteractiveNapariMWS):
         # TODO
         pass
 
+    def update_affinities(self, raw):
+        return self.compute_affinities(raw)
+
     def update_mws_impl(self, viewer):
         print("Update mws triggered")
         layers = viewer.layers
