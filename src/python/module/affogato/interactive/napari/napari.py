@@ -1,4 +1,5 @@
 # import os
+from itertools import product
 import numpy as np
 import h5py
 import napari
@@ -11,6 +12,7 @@ def _print_help():
     print("[u] update segmentation")
     print("[s] save current segmentation to h5")
     print("[v] save current seeds to h5")
+    print("[y] test consistency if seeds and segmentation")
     print("[h] show help")
 
 
@@ -103,11 +105,53 @@ class InteractiveNapariMWS:
             def training_step(viewer):
                 self.training_step_impl(viewer)
 
+            @viewer.bind_key('y')
+            def test_consistency(viewer):
+                seeds = viewer.layers['seeds'].data
+                print("Test consistency of layers")
+                self._test_consistency(viewer.layers['segmentation'].data, seeds)
+                print("Test consistency of segmentation")
+                self._test_consistency(self.imws(), seeds)
+
             # display help
             @viewer.bind_key('h')
             def print_help(viewer):
                 _print_help()
 
+    def _test_consistency(self, seg, seeds):
+        # check shapes
+        if seg.shape != seeds.shape:
+            print("Shapes do not agree %s, %s" % (str(seg.shape), str(seeds.shape)))
+            return False
+
+        # check seed ids
+        seed_ids = np.unique(seeds)[1:]
+        print("Found seeds:", seed_ids)
+        for seed_id in seed_ids:
+            seed_mask = seeds == seed_id
+            seg_ids = np.unique(seg[seed_mask])
+            if len(seg_ids) != 1:
+                print("Expected a single segmentation id for seed %i, got %s" % (seed_id, str(seg_ids)))
+                return False
+
+        # check pairs of seed ids
+        for seed_a, seed_b in product(seed_ids, seed_ids):
+            if seed_a >= seed_b:
+                continue
+            print("Checking seed pair", seed_a, seed_b)
+            mask_a = seeds == seed_a
+            mask_b = seeds == seed_b
+            ids_a = np.unique(seg[mask_a])
+            ids_b = np.unique(seg[mask_b])
+            if len(ids_a) != len(ids_b) != 1:
+                print("Expected id arrays of len 1, got %s, %s" % (str(ids_a), str(ids_b)))
+                return False
+            if ids_a[0] == ids_b[0]:
+                print("Seeds %i and %i were mapped to the same segment id %i" % (seed_a, seed_b, ids_a[0]))
+                return False
+
+        print("Passed")
+        return True
 
     def training_step_impl(self, viewer):
         pass

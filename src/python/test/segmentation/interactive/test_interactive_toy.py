@@ -3,7 +3,7 @@ import numpy as np
 
 
 # TODO check correctness for toy data
-class TestInteractiveMws(unittest.TestCase):
+class TestInteractiveMwsToy(unittest.TestCase):
     shape = (128, 128)
     offsets = [[-1, 0], [0, -1],
                [-3, 0], [0, -3],

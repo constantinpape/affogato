@@ -1,2 +1,3 @@
 from .napari import InteractiveNapariMWS
-from .napari_training import TrainableNapariMWS
+# NOTE don't import TrainableNapariMWS here, beacuse this makes everything depend on tiktorch
+# from .napari_training import TrainableNapariMWS
