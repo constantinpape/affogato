@@ -1,5 +1,6 @@
 import numpy as np
-from ._affinities import *
+from ._affinities import (compute_affinities, compute_multiscale_affinities,
+                          compute_embedding_distances_l2, compute_embedding_distances_cos)
 
 try:
     from scipy import ndimage
@@ -15,6 +16,21 @@ def compute_embedding_distances(values, offsets, norm='l2'):
         return compute_embedding_distances_cos(values, offsets)
     else:
         raise ValueError("Invalid norm %s" % norm)
+
+
+def affinities_with_masked_ignore_transition(segmentation, offsets, ignore_label=0):
+    # compute the regular affinities with mask for the ignore label
+    affs, mask = compute_affinities(segmentation, offsets,
+                                    have_ignore_label=True, ignore_label=ignore_label)
+    # get a mask for the transition to ignore label, by computing the affinities of the ignore mask
+    ignore_mask = segmentation == ignore_label
+    ignore_transitions, _ = compute_affinities(ignore_mask, offsets)
+    ignore_transitions = ignore_transitions == 0
+    # set the affinities in the ignore transition to repulsive (=0)
+    # and set the mask to be valid
+    affs[ignore_transitions] = 0
+    mask[ignore_transitions] = 1
+    return affs, mask
 
 
 if WITH_SCIPY:
