@@ -12,6 +12,7 @@ def _print_help():
     print("[u] update segmentation")
     print("[s] save current segmentation to h5")
     print("[a | in trainable mode] predict new affinities with neural Network")
+    print("[n | in trainable mode] add current seeded regions to the dataset")
     print("[v] save current seeds to h5")
     print("[y] test consistency if seeds and segmentation")
     print("[h] show help")
@@ -75,7 +76,7 @@ class InteractiveNapariMWS:
             # add image layers and point layer for seeds
             viewer.add_image(self.raw, name='raw')
             viewer.add_labels(seg, name='segmentation')
-            viewer.add_image(self.imws.affinities, name='affinities')
+            viewer.add_image(self.imws.affinities, name='affinities', multichannel=True)
             viewer.add_labels(np.zeros_like(seg), name='seeds')
 
             # add key-bindings
