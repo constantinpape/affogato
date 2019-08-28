@@ -121,7 +121,14 @@ class InteractiveNapariMWS:
                 if affs is not None:
                     print("updating affinities")
                     self.imws.update_affinities(affs)
-                
+
+            # update
+            @viewer.bind_key('n')
+            def call_update_dataset(viewer):
+                self.update_dataset(self.raw,
+                                    viewer.layers['seeds'].data,
+                                    viewer.layers['segmentation'].data)
+
             # display help
             @viewer.bind_key('h')
             def print_help(viewer):
@@ -129,6 +136,9 @@ class InteractiveNapariMWS:
 
     def update_affinities(self, *args, **kwargs):
         return None
+
+    def update_dataset(self, raw, seeds, segmentation):
+        pass
 
     def _test_consistency(self, seg, seeds):
         # check shapes
