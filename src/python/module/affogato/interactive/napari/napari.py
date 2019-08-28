@@ -11,6 +11,8 @@ def _print_help():
     print("Keybindigns:")
     print("[u] update segmentation")
     print("[s] save current segmentation to h5")
+    print("[a | in trainable mode] predict new affinities with neural Network")
+    print("[n | in trainable mode] add current seeded regions to the dataset")
     print("[v] save current seeds to h5")
     print("[y] test consistency if seeds and segmentation")
     print("[h] show help")
@@ -74,6 +76,7 @@ class InteractiveNapariMWS:
             # add image layers and point layer for seeds
             viewer.add_image(self.raw, name='raw')
             viewer.add_labels(seg, name='segmentation')
+            viewer.add_image(self.imws.affinities, name='affinities', multichannel=True)
             viewer.add_labels(np.zeros_like(seg), name='seeds')
 
             # add key-bindings
@@ -112,10 +115,31 @@ class InteractiveNapariMWS:
                 print("Test consistency of segmentation")
                 self._test_consistency(self.imws(), seeds)
 
+            # update affinities
+            @viewer.bind_key('a')
+            def call_update_affinities(viewer):
+                affs = self.update_affinities(self.raw)
+                if affs is not None:
+                    print("updating affinities")
+                    self.imws.update_affinities(affs)
+
+            # update
+            @viewer.bind_key('n')
+            def call_update_dataset(viewer):
+                self.update_dataset(self.raw,
+                                    viewer.layers['seeds'].data,
+                                    viewer.layers['segmentation'].data)
+
             # display help
             @viewer.bind_key('h')
             def print_help(viewer):
                 _print_help()
+
+    def update_affinities(self, *args, **kwargs):
+        return None
+
+    def update_dataset(self, raw, seeds, segmentation):
+        pass
 
     def _test_consistency(self, seg, seeds):
         # check shapes

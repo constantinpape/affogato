@@ -1,5 +1,5 @@
 import h5py
-from affogato.interactive.napari import TrainableNapariMWS
+from affogato.interactive.napari.napari_training import TrainableNapariMWS
 
 
 def trainable_napari():
@@ -8,7 +8,7 @@ def trainable_napari():
     with h5py.File(path, 'r') as f:
         raw = f['raw'][z]
 
-    checkpoint = '/home/swolf/local/src/affogato/example/data/Affinity_Unet'
+    checkpoint = '/home/swolf/local/src/affogato/example/data/AffinityUnet'
 
     strides = [4, 4]
     offsets = [[-1, 0], [0, -1], [-3, 0], [0, -3],

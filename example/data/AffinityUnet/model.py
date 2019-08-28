@@ -6,6 +6,7 @@ from inferno.extensions.layers.convolutional import ConvELU2D, Conv2D
 
 
 class Upsample(nn.Module):
+
     def __init__(self, scale_factor, mode):
         super().__init__()
         self.interp = nn.functional.interpolate
@@ -22,6 +23,7 @@ class Upsample(nn.Module):
 
 
 class Xcoder(nn.Module):
+
     def __init__(self, previous_in_channels, out_channels, kernel_size, pre_output):
         super(Xcoder, self).__init__()
         assert out_channels % 2 == 0
@@ -49,24 +51,28 @@ class Xcoder(nn.Module):
 
 
 class Encoder(Xcoder):
+
     def __init__(self, previous_in_channels, out_channels, kernel_size):
         super(Encoder, self).__init__(previous_in_channels, out_channels, kernel_size,
                                       pre_output=nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
 
 
 class Decoder(Xcoder):
+
     def __init__(self, previous_in_channels, out_channels, kernel_size):
         super(Decoder, self).__init__(previous_in_channels, out_channels, kernel_size,
                                       pre_output=Upsample(scale_factor=2, mode='nearest'))
 
 
 class Base(Xcoder):
+
     def __init__(self, previous_in_channels, out_channels, kernel_size):
         super(Base, self).__init__(previous_in_channels, out_channels, kernel_size,
                                    pre_output=None)
 
 
 class Output(Conv2D):
+
     def __init__(self, previous_in_channels, out_channels, kernel_size):
         self.in_channels = sum(previous_in_channels)
         self.out_channels = out_channels
@@ -74,6 +80,7 @@ class Output(Conv2D):
 
 
 class DUNetSkeleton(nn.Module):
+
     def __init__(self, encoders, decoders, base, output, final_activation=None,
                  return_hypercolumns=False):
         super(DUNetSkeleton, self).__init__()
@@ -175,11 +182,11 @@ class DUNetSkeleton(nn.Module):
             return out
         else:
             out = torch.cat((input_,
-                             #e0_2us,
-                             #e1_4us,
-                             #e2_8us,
-                             #b_8us,
-                             #d2_4us,
+                             # e0_2us,
+                             # e1_4us,
+                             # e2_8us,
+                             # b_8us,
+                             # d2_4us,
                              d1_2us,
                              d0,
                              out), 1)
@@ -187,7 +194,12 @@ class DUNetSkeleton(nn.Module):
 
 
 class DUNet2D(DUNetSkeleton):
-    def __init__(self, in_channels, out_channels, N=16, return_hypercolumns=False):
+
+    def __init__(self, in_channels,
+                 out_channels,
+                 N=16,
+                 return_hypercolumns=False,
+                 use_sigmoid=False):
         # Build encoders
         encoders = [
             Encoder([in_channels], N, 3),
@@ -205,7 +217,7 @@ class DUNet2D(DUNetSkeleton):
         # Build output
         output = Output([in_channels, N, 2 * N, 4 * N, 4 * N, 2 * N, N, N], out_channels, 3)
         # Parse final activation
-        final_activation = nn.Sigmoid() if out_channels == 1 else nn.Softmax2d()
+        final_activation = nn.Sigmoid() if (out_channels == 1 or use_sigmoid) else nn.Softmax2d()
         # dundundun
         super(DUNet2D, self).__init__(encoders=encoders,
                                       decoders=decoders,
@@ -229,8 +241,45 @@ class DUNet2D(DUNetSkeleton):
             output = output.view(b, c, 1, _0, _1)
         return output
 
+
 if __name__ == "__main__":
-    model = DUNet2D(1, 1)
-    x = torch.randn(1, 1, 16, 16)
-    pred = model(x)
-    print(pred.shape)
+    # model = DUNet2D(in_channels=1, out_channels=8, use_sigmoid=True)
+    state = torch.load("example/data/AffinityUnet/state.nn",
+                       map_location='cpu')
+
+    
+
+    # # translate weight by hand (this is super hacky but was the easiest way at the time ...)
+    # model.encoders[0].conv1.conv.weight[:] = state.encoders[0].conv1.conv.weight[:]
+    # model.encoders[0].conv1.conv.bias[:] = state.encoders[0].conv1.conv.bias[:]
+    # model.encoders[0].conv2.conv.weight[:] = state.encoders[0].conv2.conv.weight[:]
+    # model.encoders[0].conv2.conv.bias[:] = state.encoders[0].conv2.conv.bias[:]
+    # model.encoders[1].conv1.conv.weight[:] = state.encoders[1].conv1.conv.weight[:]
+    # model.encoders[1].conv1.conv.bias[:] = state.encoders[1].conv1.conv.bias[:]
+    # model.encoders[1].conv2.conv.weight[:] = state.encoders[1].conv2.conv.weight[:]
+    # model.encoders[1].conv2.conv.bias[:] = state.encoders[1].conv2.conv.bias[:]
+    # model.encoders[2].conv1.conv.weight[:] = state.encoders[2].conv1.conv.weight[:]
+    # model.encoders[2].conv1.conv.bias[:] = state.encoders[2].conv1.conv.bias[:]
+    # model.encoders[2].conv2.conv.weight[:] = state.encoders[2].conv2.conv.weight[:]
+    # model.encoders[2].conv2.conv.bias[:] = state.encoders[2].conv2.conv.bias[:]
+    # model.decoders[0].conv1.conv.weight[:] = state.decoders[0].conv1.conv.weight[:]
+    # model.decoders[0].conv1.conv.bias[:] = state.decoders[0].conv1.conv.bias[:]
+    # model.decoders[0].conv2.conv.weight[:] = state.decoders[0].conv2.conv.weight[:]
+    # model.decoders[0].conv2.conv.bias[:] = state.decoders[0].conv2.conv.bias[:]
+    # model.decoders[1].conv1.conv.weight[:] = state.decoders[1].conv1.conv.weight[:]
+    # model.decoders[1].conv1.conv.bias[:] = state.decoders[1].conv1.conv.bias[:]
+    # model.decoders[1].conv2.conv.weight[:] = state.decoders[1].conv2.conv.weight[:]
+    # model.decoders[1].conv2.conv.bias[:] = state.decoders[1].conv2.conv.bias[:]
+    # model.decoders[2].conv1.conv.weight[:] = state.decoders[2].conv1.conv.weight[:]
+    # model.decoders[2].conv1.conv.bias[:] = state.decoders[2].conv1.conv.bias[:]
+    # model.decoders[2].conv2.conv.weight[:] = state.decoders[2].conv2.conv.weight[:]
+    # model.decoders[2].conv2.conv.bias[:] = state.decoders[2].conv2.conv.bias[:]
+    # model.base.conv1.conv.weight[:] = state.base.conv1.conv.weight[:]
+    # model.base.conv1.conv.bias[:] = state.base.conv1.conv.bias[:]
+    # model.base.conv2.conv.weight[:] = state.base.conv2.conv.weight[:]
+    # model.base.conv2.conv.bias[:] = state.base.conv2.conv.bias[:]
+    # model.output.conv.weight[:] = state.output.conv.weight[:]
+    # model.output.conv.bias[:] = state.output.conv.bias[:]
+
+
+    torch.save(state.state_dict(), "state_trans.nn")

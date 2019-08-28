@@ -3,11 +3,14 @@ from .napari import InteractiveNapariMWS
 from ...segmentation import InteractiveMWS
 from tiktorch.types import Model, ModelState
 from os import path
-import torch
 import yaml
 from tiktorch.launcher import LocalServerLauncher, RemoteSSHServerLauncher, SSHCred, wait
 from tiktorch.rpc import Client, TCPConnConf
 from tiktorch.rpc_interface import INeuralNetworkAPI
+from tiktorch.types import NDArray
+from tiktorch.tiktypes import TikTensorBatch
+from tiktorch import tiktypes as types
+from tiktorch.server.handler import datasets
 
 
 def read_bytes(filename):
@@ -28,8 +31,11 @@ class TrainableNapariMWS(InteractiveNapariMWS):
         self.offsets = offsets
 
         # initialize network
-        self.model = self.initialize_model(checkpoint)
+        self.neuralnetwork_client = self.initialize_model(checkpoint)
+        print("Computing Affinities")
         affs = self.compute_affinities(raw)
+
+        print("Starting InteractiveNapariMWS")
 
         super().__init__(raw,
                          affs,
@@ -40,7 +46,7 @@ class TrainableNapariMWS(InteractiveNapariMWS):
     def initialize_model(self, checkpoint):
         code = open(path.join(checkpoint, "model.py"), 'rb').read()
         conf_file = path.join(checkpoint, "tiktorch_config.yml")
-        state_file = path.join(checkpoint, "state_8.nn")
+        state_file = path.join(checkpoint, "state_dict.nn")
         srv_file = path.join(checkpoint, "server.yml")
         conf = yaml.safe_load(read_bytes(conf_file))
 
@@ -53,30 +59,39 @@ class TrainableNapariMWS(InteractiveNapariMWS):
         conn_conf = TCPConnConf(server_conf['ip'],
                                 server_conf['port0'],
                                 server_conf['port1'],
-                                timeout=20)
+                                timeout=200)
 
         cred = SSHCred(server_conf['user'],
                        key_path=server_conf['key_file'])
         launcher = RemoteSSHServerLauncher(conn_conf, cred=cred)
         launcher.start()
 
-        client = Client(INeuralNetworkAPI(), conn_conf)
+        neuralnetwork_client = Client(INeuralNetworkAPI(), conn_conf)
         state = read_bytes(state_file)
 
-        client.load_model(Model(code=code, config=conf),
-                          state=ModelState(model_state=state),
-                          devices=[server_conf['device']])
+        neuralnetwork_client.load_model(Model(code=code, config=conf),
+                                        state=ModelState(model_state=state),
+                                        devices=[server_conf['device']])
 
-        return client
+        return neuralnetwork_client
 
     def compute_affinities(self, raw):
-        affs = None
-        # TODO: add network computation here
-        return affs
+        affs = self.neuralnetwork_client.forward(NDArray(raw[None]))
+        return affs.result().as_numpy()
 
     def training_step_impl(self, viewer):
-        # TODO
-        pass
+        self.neuralnetwork_client.resume_training()
+
+    def update_affinities(self, raw):
+        return self.compute_affinities(raw)
+
+    def update_dataset(self, raw, seeds, segmentation):
+
+        print("updating dataset")
+        data = types.TikTensorBatch([types.TikTensor(raw[None], id_=(0, 0)), ])
+        labels = types.TikTensorBatch([types.TikTensor(segmentation[None], id_=(0, 0)), ])
+
+        self.neuralnetwork_client.update_training_data(data, labels)
 
     def update_mws_impl(self, viewer):
         print("Update mws triggered")
