@@ -32,7 +32,6 @@ class InteractiveMWS():
     def ndim(self):
         return len(self.shape)
 
-
     #
     # update the graph
     #
@@ -78,6 +77,16 @@ class InteractiveMWS():
     def clear_seeds(self):
         self._grid_graph.clear_seeds()
         self._seeds = np.zeros(self.shape, dtype='uint64')
+
+    def get_seeds(self):
+        return self._seeds
+
+    def get_segmentation_with_seeds(self, segmentation):
+        seed_mask = self._seeds > 0
+        seg_ids = np.unique(segmentation[seed_mask])
+        unseeded = np.logical_not(np.isin(segmentation, seg_ids))
+        segmentation[unseeded] = 0
+        return segmentation
 
     #
     # segmentation functionality
