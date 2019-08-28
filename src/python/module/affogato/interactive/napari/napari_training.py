@@ -80,18 +80,17 @@ class TrainableNapariMWS(InteractiveNapariMWS):
         return affs.result().as_numpy()
 
     def training_step_impl(self, viewer):
-        pass
+        self.neuralnetwork_client.resume_training()
 
     def update_affinities(self, raw):
         return self.compute_affinities(raw)
 
     def update_dataset(self, raw, seeds, segmentation):
-        labels = types.TikTensorBatch(
-            [types.TikTensor(np.ones(shape=(3, 3)), id_=(0, 0)), types.TikTensor(np.ones(shape=(3, 3)), id_=(1, 0))]
-        )
-        data = types.TikTensorBatch(
-            [types.TikTensor(np.ones(shape=(3, 3)), id_=(0, 0)), types.TikTensor(np.ones(shape=(3, 3)), id_=(1, 0))]
-        )
+
+        print("updating dataset")
+        data = types.TikTensorBatch([types.TikTensor(raw[None], id_=(0, 0)), ])
+        labels = types.TikTensorBatch([types.TikTensor(segmentation[None], id_=(0, 0)), ])
+
         self.neuralnetwork_client.update_training_data(data, labels)
 
     def update_mws_impl(self, viewer):

@@ -9,8 +9,10 @@ model_init_kwargs: {in_channels: 1, out_channels: 8, use_sigmoid: true}
 halo: [0, 0, 0]
 training:
   batch_size: 1
-  training_shape: [1, 128, 128]  # in terms of input axis order
+  training_shape: [1, 1024, 1024]  # in terms of input axis order
   loss_criterion_config: {method: MSELoss}
+  num_iterations_max: 10
+  num_iterations_per_update: 10
   optimizer_config: {method: Adam, lr: 1.0e-4}
   num_iterations_per_update: 2
   transforms:
