@@ -1,5 +1,5 @@
 import h5py
-from affogato.interactive.napari import TrainableNapariMWS
+from affogato.interactive.napari.napari_training import TrainableNapariMWS
 
 
 def trainable_napari():
