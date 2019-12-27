@@ -77,16 +77,14 @@ include_directories("${CMAKE_PREFIX_PATH}/include")
 # Include system / conda libs
 ###############################
 
-# TODO I don't really see why we need libthreads here
 # find libraries - pthread
 find_package(Threads)
-# TODO do we need RT ?!
 
 # boost
 SET(BOOST_ROOT "${CMAKE_PREFIX_PATH}")
 SET(BOOST_LIBRARYDIR "${CMAKE_PREFIX_PATH}/lib")
 SET(Boost_NO_SYSTEM_PATHS ON)
-find_package(Boost 1.63.0 COMPONENTS system filesystem REQUIRED)
+find_package(Boost 1.63.0 REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
 
@@ -96,6 +94,12 @@ include_directories(${Boost_INCLUDE_DIR})
 
 find_package(pybind11 REQUIRED)
 set(PYBIND11_CPP_STANDARD -std=c++14)
+
+find_package(NUMPY REQUIRED)
+include_directories(${NUMPY_INCLUDE_DIRS})
+
+find_package(xtensor-python REQUIRED)
+include_directories(${xtensor-python_INCLUDE_DIRS})
 
 
 ###############################
