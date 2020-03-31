@@ -31,9 +31,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 string(TOUPPER "${CMAKE_BUILD_TYPE}" U_CMAKE_BUILD_TYPE)
 
-# Old ABI to be compatible with boost
-add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
-
 
 ##############################
 # Build options
