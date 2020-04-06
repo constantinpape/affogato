@@ -298,8 +298,8 @@ namespace segmentation {
             }
 
             // check that position - offset_stride lies within 0 and number_of_nodes
-            const bool within_bounds = (offset_strides[i] > 0 or position < number_of_nodes + offset_strides[i])
-                                    and (offset_strides[i] < 0 or offset_strides[i] <= position);
+            const bool within_bounds = (offset_strides[i] > 0 and position - offset_strides[i] >= 0)
+                                    or (offset_strides[i] < 0 and position - offset_strides[i] < number_of_nodes);
 
             // go in negative offset direction
             if (within_bounds){
