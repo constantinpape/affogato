@@ -43,6 +43,50 @@ namespace affogato {
                py::arg("offset"),
                py::arg("have_ignore_label")=false,
                py::arg("ignore_label")=0);
+
+        m.def("compute_affinities_with_glia_impl_", [](const xt::pyarray<T> & labels,
+                                       const std::vector<std::vector<int>> & offsets,
+                                       const bool have_ignore_label,
+                                       const bool have_boundary_label,
+                                       const bool have_glia_label,
+                                       const T ignore_label,
+                                       const T boundary_label,
+                                       const T glia_label
+                                       ) {
+                  // compute the out shape
+                  typedef typename xt::pyarray<float>::shape_type ShapeType;
+                  const auto & shape = labels.shape();
+                  const unsigned ndim = labels.dimension();
+                  ShapeType out_shape(ndim + 1);
+                  out_shape[0] = offsets.size();
+                  for(unsigned d = 0; d < ndim; ++d) {
+                      out_shape[d + 1] = shape[d];
+                  }
+
+                  // allocate the output
+                  xt::pyarray<float> affs = xt::zeros<float>(out_shape);
+                  xt::pyarray<uint8_t> mask = xt::zeros<uint8_t>(out_shape);
+                  {
+                      py::gil_scoped_release allowThreads;
+                      affinities::compute_affinities_with_glia(labels, offsets,
+                                                     affs, mask,
+                                                     have_ignore_label,
+                                                     have_boundary_label,
+                                                     have_glia_label,
+                                                     ignore_label,
+                                                     boundary_label,
+                                                     glia_label);
+                  }
+                  return std::make_pair(affs, mask);
+              }, py::arg("labels").noconvert(),
+              py::arg("offset"),
+              py::arg("have_ignore_label")=false,
+              py::arg("have_boundary_label")=false,
+              py::arg("have_glia_label")=false,
+              py::arg("ignore_label")=0,
+              py::arg("boundary_label")=1,
+              py::arg("glia_label")=2
+              );
     }
 
 
