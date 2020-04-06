@@ -17,21 +17,29 @@ def compute_embedding_distances(values, offsets, norm='l2'):
         raise ValueError("Invalid norm %s" % norm)
 
 
-def compute_affinities_with_glia(labels, offset,
+def compute_affinities(labels, offset,
                                  ignore_label=None,
-                                 boundary_label=None,
-                                 glia_label=None):
+                                 boundary_mask=None,
+                                 glia_mask=None):
 
     have_ignore_label = ignore_label is not None
-    have_boundary_label = boundary_label is not None
-    have_glia_label = glia_label is not None
     ignore_label = ignore_label if ignore_label is not None else 0
-    boundary_label = boundary_label if boundary_label is not None else 0
-    glia_label = glia_label if glia_label is not None else 0
 
-    return compute_affinities_with_glia_impl_(labels, offset,
-                                         have_ignore_label, have_boundary_label, have_glia_label,
-                                         ignore_label, boundary_label, glia_label)
+    if boundary_mask is None:
+        boundary_mask = np.zeros_like(labels, dtype='uint8')
+    else:
+        boundary_mask = boundary_mask.astype('uint8')
+
+    if glia_mask is None:
+        glia_mask = np.zeros_like(labels, dtype='uint8')
+    else:
+        glia_mask = glia_mask.astype('uint8')
+
+    return compute_affinities_impl_(labels, offset,
+                                        boundary_mask,
+                                        glia_mask,
+                                        have_ignore_label,
+                                        ignore_label)
 
 
 if WITH_SCIPY:
