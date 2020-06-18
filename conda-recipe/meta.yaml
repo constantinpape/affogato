@@ -23,7 +23,7 @@ requirements:
     - python {{PY_VER}}*
     - cmake
     - boost >=1.63
-    - xtensor-python 0.22.0
+    - xtensor-python
   run:
     - python {{PY_VER}}*
     - numpy # do not need to constrain np version
