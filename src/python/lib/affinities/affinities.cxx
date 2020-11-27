@@ -45,6 +45,50 @@ namespace affogato {
                py::arg("ignore_label")=0);
     }
 
+    // affinities with lookup tables for the transitions
+    template<typename T>
+    void export_affinities_with_lut_T(py::module & m) {
+        m.def("compute_affinities_with_lut", [](const xt::pyarray<T> & labels,
+                                                const std::vector<std::vector<int>> & offsets,
+                                                const xt::pytensor<T, 2> & keys,
+                                                const xt::pytensor<float, 1> & vals,
+                                                const float default_val,
+                                                const bool have_ignore_label,
+                                                const T ignore_label) {
+                // compute the out shape
+                typedef typename xt::pyarray<float>::shape_type ShapeType;
+                const auto & shape = labels.shape();
+                const unsigned ndim = labels.dimension();
+                ShapeType out_shape(ndim + 1);
+                out_shape[0] = offsets.size();
+                for(unsigned d = 0; d < ndim; ++d) {
+                    out_shape[d + 1] = shape[d];
+                }
+
+                // allocate the output
+                xt::pyarray<float> affs = xt::zeros<float>(out_shape);
+                xt::pyarray<uint8_t> mask = xt::zeros<uint8_t>(out_shape);
+                {
+                    py::gil_scoped_release allowThreads;
+
+                    std::unordered_map<std::pair<T, T>, float, boost::hash<std::pair<T, T>>> lut;
+                    for(std::size_t ii = 0; ii < vals.size(); ++ii) {
+                        lut[std::make_pair(keys(ii, 0), keys(ii, 1))] = vals(ii);
+                    }
+
+                    affinities::compute_affinities_with_lut(labels, offsets, lut,
+                                                            affs, mask, default_val,
+                                                            have_ignore_label, ignore_label);
+                }
+                return std::make_pair(affs, mask);
+            }, py::arg("labels").noconvert(),
+               py::arg("offsets"),
+               py::arg("keys"),
+               py::arg("vals"),
+               py::arg("default_val")=1,
+               py::arg("have_ignore_label")=false,
+               py::arg("ignore_label")=0);
+    }
 
     // for now we only export L2 norm
     template<typename T>
@@ -194,6 +238,9 @@ PYBIND11_MODULE(_affinities, m)
     export_affinities_T<bool>(m);
     export_affinities_T<uint64_t>(m);
     export_affinities_T<int64_t>(m);
+
+    export_affinities_with_lut_T<uint64_t>(m);
+    export_affinities_with_lut_T<int64_t>(m);
 
     export_multiscale_affinities_T<uint64_t>(m);
     export_multiscale_affinities_T<int64_t>(m);
