@@ -4,7 +4,7 @@ from ._segmentation import compute_mws_clustering, MWSGridGraph
 
 # TODO support a data backend like zarr etc.
 class InteractiveMWS():
-    def __init__(self, affinities, offsets, n_attractive_channels=2,
+    def __init__(self, affinities, offsets, n_attractive_channels=None,
                  strides=None, randomize_strides=False):
         if len(offsets) != affinities.shape[0]:
             raise ValueError("Number offsets and affinity channels do not match")
@@ -14,9 +14,9 @@ class InteractiveMWS():
         self._affinities = affinities
         self._offsets = offsets
         self._seeds = np.zeros(self.shape, dtype='uint64')
-        self._n_attractive = n_attractive_channels
+        self._n_attractive = self.ndim if n_attractive_channels is None else n_attractive_channels
         # strides and randomization
-        self.strides = [1, 1, 1] if strides is None else strides
+        self.strides = [1] * self.ndim if strides is None else strides
         self.randomize_strides = randomize_strides
         # comppute the initial graph shape (= uv-ids, mutex-uv-ids, ...)
         self._update_graph()
@@ -28,6 +28,11 @@ class InteractiveMWS():
     def shape(self):
         return self._shape
 
+    @property
+    def ndim(self):
+        return len(self.shape)
+
+
     #
     # update the graph
     #
@@ -35,15 +40,12 @@ class InteractiveMWS():
     def _update_graph(self):
         # compute the attractive edges
         # we set to > 1 to make sure these are the very first in priority
-        self._grid_graph.same_seed_weight = 1.1
-        self._grid_graph.different_seed_weight = 0
+        self._grid_graph.add_attractive_seed_edges = True
         self._uvs, self._weights = self._grid_graph.compute_nh_and_weights(1. - self._affinities[:self._n_attractive],
                                                                            self._offsets[:self._n_attractive])
 
         # compute the repulsive edges
-        self._grid_graph.same_seed_weight = 0
-        # we set to > 1 to make sure these are the very first in priority
-        self._grid_graph.different_seed_weight = 1.1
+        self._grid_graph.add_attractive_seed_edges = False
         self._mutex_uvs, self._mutex_weights = self._grid_graph.compute_nh_and_weights(self._affinities[self._n_attractive:],
                                                                                        self._offsets[self._n_attractive:],
                                                                                        strides=self.strides,
@@ -98,6 +100,14 @@ class InteractiveMWS():
 
     def unlock_seeds(self, unlock_seeds):
         self._locked_seeds.difference_update(unlock_seeds)
+
+    @property
+    def affinities(self):
+        return self._affinities
+
+    @affinities.setter
+    def affinities(self, affs):
+        self._affinities = affs
 
     #
     # tiktorch functionality

@@ -1,4 +1,5 @@
 # import os
+from itertools import product
 import numpy as np
 import h5py
 import napari
@@ -11,6 +12,7 @@ def _print_help():
     print("[u] update segmentation")
     print("[s] save current segmentation to h5")
     print("[v] save current seeds to h5")
+    print("[y] test consistency if seeds and segmentation")
     print("[h] show help")
 
 
@@ -36,80 +38,136 @@ def _save(path, data):
         f.create_dataset('data', data=data, compression='gzip')
 
 
-def napari_mws_2d(raw, imws):
-    # get the initial mws segmentation
-    seg = imws()
+class InteractiveNapariMWS:
 
-    # initialize save paths for segmentation and seeds
-    seg_path = None
-    seed_path = None
-    _print_help()
+    def __init__(self,
+                 raw,
+                 affs,
+                 offsets,
+                 strides=None,
+                 randomize_strides=True):
 
-    # add initial layers to the viewer
-    with napari.gui_qt():
-        viewer = napari.Viewer()
+        ndim = len(offsets[0])
+        assert raw.ndim == ndim
+        assert affs.ndim == ndim + 1
+        assert ndim in (2, 3)
 
-        # add image layers and point layer for seeds
-        viewer.add_image(raw, name='raw')
-        viewer.add_labels(seg, name='segmentation')
-        viewer.add_labels(np.zeros_like(seg), name='seeds')
+        self.raw = raw
+        self.imws = InteractiveMWS(affs, offsets, n_attractive_channels=ndim,
+                                   strides=strides, randomize_strides=randomize_strides)
 
-        # add key-bindings
+        self.run()
 
-        # update segmentation by re-running mws
-        @viewer.bind_key('u')
-        def update_mws(viewer):
-            print("Update mws triggered")
-            layers = viewer.layers
-            seeds = layers['seeds'].data
-            seg_layer = layers['segmentation']
-            print("Clearing seeds ...")
-            imws.clear_seeds()
-            # FIXME this takes much to long, something is wrong here
-            print("Updating seeds ...")
-            imws.update_seeds(seeds)
-            print("Recomputing segmentation from seeds ...")
-            seg = imws()
-            print("... done")
-            seg_layer.data = seg
-            seg_layer.refresh()
+    def run(self):
+        # get the initial mws segmentation
+        seg = self.imws()
 
-        # save the current segmentation
-        @viewer.bind_key('s')
-        def save_segmentation(viewer):
-            nonlocal seg_path
-            seg_path = _read_file_path(seg_path)
-            seg = viewer.layers['segmentation'].data
-            _save(seg_path, seg)
+        # initialize save paths for segmentation and seeds
+        seg_path = None
+        seed_path = None
+        _print_help()
 
-        # save the current seeds
-        @viewer.bind_key('v')
-        def save_seeds(viewer):
-            nonlocal seed_path
-            seed_path = _read_file_path(seed_path)
-            seeds = viewer.layers['seeds'].data
-            _save(seed_path, seeds)
+        # add initial layers to the viewer
+        with napari.gui_qt():
+            viewer = napari.Viewer()
 
-        # display help
-        @viewer.bind_key('h')
-        def print_help(viewer):
-            _print_help()
+            # add image layers and point layer for seeds
+            viewer.add_image(self.raw, name='raw')
+            viewer.add_labels(seg, name='segmentation')
+            viewer.add_labels(np.zeros_like(seg), name='seeds')
 
+            # add key-bindings
 
-# TODO enable with seeds
-def interactive_napari_mws(raw, affs, offsets,
-                           strides=None, randomize_strides=False):
-    ndim = len(offsets[0])
-    assert raw.ndim == ndim
-    assert affs.ndim == ndim + 1
-    assert ndim in (2, 3)
+            # update segmentation by re-running mws
+            @viewer.bind_key('u')
+            def update_mws(viewer):
+                self.update_mws_impl(viewer)
 
-    imws = InteractiveMWS(affs, offsets, n_attractive_channels=ndim,
-                          strides=strides, randomize_strides=randomize_strides)
+            # save the current segmentation
+            @viewer.bind_key('s')
+            def save_segmentation(viewer):
+                nonlocal seg_path
+                seg_path = _read_file_path(seg_path)
+                seg = viewer.layers['segmentation'].data
+                _save(seg_path, seg)
 
-    if ndim == 2:
-        napari_mws_2d(raw, imws)
-    else:
-        assert False
-        # TODO implement 3d
-        # napari_mws_3d()
+            # save the current seeds
+            @viewer.bind_key('v')
+            def save_seeds(viewer):
+                nonlocal seed_path
+                seed_path = _read_file_path(seed_path)
+                seeds = viewer.layers['seeds'].data
+                _save(seed_path, seeds)
+
+            # save the current seeds
+            @viewer.bind_key('t')
+            def training_step(viewer):
+                self.training_step_impl(viewer)
+
+            @viewer.bind_key('y')
+            def test_consistency(viewer):
+                seeds = viewer.layers['seeds'].data
+                print("Test consistency of layers")
+                self._test_consistency(viewer.layers['segmentation'].data, seeds)
+                print("Test consistency of segmentation")
+                self._test_consistency(self.imws(), seeds)
+
+            # display help
+            @viewer.bind_key('h')
+            def print_help(viewer):
+                _print_help()
+
+    def _test_consistency(self, seg, seeds):
+        # check shapes
+        if seg.shape != seeds.shape:
+            print("Shapes do not agree %s, %s" % (str(seg.shape), str(seeds.shape)))
+            return False
+
+        # check seed ids
+        seed_ids = np.unique(seeds)[1:]
+        print("Found seeds:", seed_ids)
+        for seed_id in seed_ids:
+            seed_mask = seeds == seed_id
+            seg_ids = np.unique(seg[seed_mask])
+            if len(seg_ids) != 1:
+                print("Expected a single segmentation id for seed %i, got %s" % (seed_id, str(seg_ids)))
+                return False
+
+        # check pairs of seed ids
+        for seed_a, seed_b in product(seed_ids, seed_ids):
+            if seed_a >= seed_b:
+                continue
+            print("Checking seed pair", seed_a, seed_b)
+            mask_a = seeds == seed_a
+            mask_b = seeds == seed_b
+            ids_a = np.unique(seg[mask_a])
+            ids_b = np.unique(seg[mask_b])
+            if len(ids_a) != len(ids_b) != 1:
+                print("Expected id arrays of len 1, got %s, %s" % (str(ids_a), str(ids_b)))
+                return False
+            if ids_a[0] == ids_b[0]:
+                print("Seeds %i and %i were mapped to the same segment id %i" % (seed_a, seed_b, ids_a[0]))
+                return False
+
+        print("Passed")
+        return True
+
+    def training_step_impl(self, viewer):
+        pass
+
+    def update_mws_impl(self, viewer):
+        print("Update mws triggered")
+        layers = viewer.layers
+        seeds = layers['seeds'].data
+
+        seg_layer = layers['segmentation']
+        print("Clearing seeds ...")
+        self.imws.clear_seeds()
+        # FIXME this takes much to long, something is wrong here
+        print("Updating seeds ...")
+        self.imws.update_seeds(seeds)
+        print("Recomputing segmentation from seeds ...")
+        seg = self.imws()
+        print("... done")
+        seg_layer.data = seg
+        seg_layer.refresh()
