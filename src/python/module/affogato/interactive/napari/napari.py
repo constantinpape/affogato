@@ -2,8 +2,14 @@
 from itertools import product
 import numpy as np
 import h5py
+
 import napari
+from vispy.color import Colormap
+
 from ...segmentation import InteractiveMWS
+
+# TODO don't use elf functionality
+from elf.segmentation.utils import seg_to_edges
 
 
 def _print_help():
@@ -47,7 +53,8 @@ class InteractiveNapariMWS:
                  affs,
                  offsets,
                  strides=None,
-                 randomize_strides=True):
+                 randomize_strides=True,
+                 show_edges=True):
 
         ndim = len(offsets[0])
         assert raw.ndim == ndim
@@ -57,6 +64,7 @@ class InteractiveNapariMWS:
         self.raw = raw
         self.imws = InteractiveMWS(affs, offsets, n_attractive_channels=ndim,
                                    strides=strides, randomize_strides=randomize_strides)
+        self.show_edges = show_edges
 
         self.run()
 
@@ -101,8 +109,18 @@ class InteractiveNapariMWS:
             # add image layers and point layer for seeds
             viewer.add_image(self.raw, name='raw')
             viewer.add_image(self.imws.affinities, name='affinities', visible=False)
-            viewer.add_labels(seg, name='segmentation')
             viewer.add_labels(np.zeros_like(seg), name='seeds')
+
+            if self.show_edges:
+                # TODO don't use elf functionality
+                edges = seg_to_edges(seg)
+                cmap = Colormap([
+                    [0., 0., 0., 0.],  # label 0 is transparent
+                    [1., 1., 1., 1.]  # label 1 is white (better color?)
+                ])
+                viewer.add_image(edges, name='edges', colormap=cmap, contrast_limits=[0, 1])
+
+            viewer.add_labels(seg, name='segmentation')
 
             # add key-bindings
 
@@ -220,6 +238,12 @@ class InteractiveNapariMWS:
 
         seg_layer.data = seg
         seg_layer.refresh()
+
+        if self.show_edges:
+            edges = seg_to_edges(seg)
+            edge_layer = layers['edges']
+            edge_layer.data = edges
+            edge_layer.refresh()
 
         aff_layer = layers['affinities']
         aff_layer.data = self.imws.affinities
