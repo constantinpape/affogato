@@ -97,7 +97,7 @@ class InteractiveNapariMWS:
         return val
 
     @property
-    def splt_mode_active(self):
+    def split_mode_active(self):
         return self._split_mode_id is not None
 
     def run(self):
@@ -116,7 +116,6 @@ class InteractiveNapariMWS:
             # add image layers and point layer for seeds
             viewer.add_image(self.raw, name='raw')
             viewer.add_image(self.imws.affinities, name='affinities', visible=False)
-            viewer.add_labels(np.zeros_like(seg), name='seeds')
 
             if self.show_edges:
                 # TODO don't use elf functionality
@@ -127,6 +126,8 @@ class InteractiveNapariMWS:
                 ])
                 viewer.add_image(edges, name='edges', colormap=cmap, contrast_limits=[0, 1])
 
+            viewer.add_labels(np.zeros_like(seg), name='locked-segment-mask', visible=False)
+            viewer.add_labels(np.zeros_like(seg), name='seeds')
             viewer.add_labels(seg, name='segmentation')
 
             # add key-bindings
@@ -144,6 +145,10 @@ class InteractiveNapariMWS:
             def attach(viewer):
                 self.attach_impl(viewer)
 
+            @viewer.bind_key('l')
+            def toggle_lock(viewer):
+                self.toggle_lock_impl(viewer)
+
             @viewer.bind_key('y')
             def test_consistency(viewer):
                 seeds = viewer.layers['seeds'].data
@@ -157,11 +162,10 @@ class InteractiveNapariMWS:
             def print_help(viewer):
                 _print_help()
 
-            # TODO select it instead of printing
             # next seed id
             @viewer.bind_key('n')
             def next_seed(viewer):
-                print(self.get_next_seed_id())
+                self.select_next_seed(viewer)
 
             # # save the current segmentation
             # @viewer.bind_key('s')
@@ -178,10 +182,6 @@ class InteractiveNapariMWS:
             #     seed_path = _read_file_path(seed_path)
             #     seeds = viewer.layers['seeds'].data
             #     _save(seed_path, seeds)
-
-            # @viewer.bind_key('t')
-            # def training_step(viewer):
-            #     self.training_step_impl(viewer)
 
     def _test_consistency(self, seg, seeds):
         # check shapes
@@ -218,10 +218,15 @@ class InteractiveNapariMWS:
         print("Passed")
         return True
 
-    def get_next_seed_id(self):
-        return self.imws.max_seed_id + 1
+    def select_next_seed(self, viewer):
+        layer = viewer.layers['seeds']
+        viewer.layers.unselect_all()
+        layer.selected = True
+        next_label = self.imws.max_seed_id + 1
+        layer.mode = 'paint'
+        layer.selected_label = next_label
 
-    def training_step_impl(self, viewer):
+    def toggle_lock_impl(self, viewer):
         pass
 
     def attach_impl(self, viewer):
@@ -239,14 +244,17 @@ class InteractiveNapariMWS:
         layers = viewer.layers
         seg_layer = layers['segmentation']
 
-        # TODO set segmentation layer to active
+        # TODO disallow selecting seeds (if possible)
         # the split mode is active -> turn it of and update the segmentation
-        if self.splt_mode_active:
+        if self.split_mode_active:
             self._split_mode_id = None
             self.update_impl(viewer)
             self._split_mask = None
 
-        # TODO set seed layer to active and select the next available seed in paint mode
+            viewer.layers.unselect_all()
+            seg_layer.selected = True
+            seg_layer.mode = 'pick'
+
         # the split mode is inactive -> turn it on
         else:
             selected_id = seg_layer.selected_label
@@ -259,19 +267,22 @@ class InteractiveNapariMWS:
             seg_layer.data = seg
             seg_layer.refresh()
 
+            self.select_next_seed(viewer)
+
     def _update_normal(self, viewer):
         layers = viewer.layers
         seg_layer = layers['segmentation']
 
-        # if we have a split mask, the split mode was
-        # just toggled off and we need to update our seeds
+        seeds = layers['seeds'].data
+        # if we are just coming from split mode we set
+        # the seeds outside the split mask to zero
         if self._split_mask is not None:
-            print("Update triggered after split mode toggle, new seeds will be added")
-            seeds = layers['seeds'].data.copy()
+            seeds = seeds.copy()
             seeds[~self._split_mask] = 0
-            self.imws.update_seeds(seeds)
+        self.imws.update_seeds(seeds)
 
         print("Recomputing segmentation")
+        # TODO keep same id as seeds!
         seg = self.imws()
 
         seg_layer.data = seg
@@ -304,7 +315,7 @@ class InteractiveNapariMWS:
         seg_layer.refresh()
 
     def update_impl(self, viewer):
-        if self.splt_mode_active:
+        if self.split_mode_active:
             print("Update triggered in split mode ...")
             self._update_split_mode(viewer)
         else:
