@@ -33,6 +33,14 @@ class InteractiveMWS():
     def ndim(self):
         return len(self.shape)
 
+    @property
+    def max_seed_id(self):
+        return self._seeds.max()
+
+    @property
+    def offsets(self):
+        return self._offsets
+
     #
     # update the graph
     #
@@ -55,26 +63,24 @@ class InteractiveMWS():
     # seed functionality
     #
 
-    # TODO we could also support a ROI
-    def _updated_seeds_dense(self, new_seeds):
+    def _update_seeds_dense(self, new_seeds, seed_offset):
         if new_seeds.shape != self.shape:
             raise ValueError("Dense seeds have incorrect shape")
         seed_mask = new_seeds != 0
-        self._seeds[seed_mask] = new_seeds[seed_mask]
+        self._seeds[seed_mask] = (new_seeds[seed_mask] + seed_offset)
 
-    def _update_seeds_sparse(self, new_seeds):
+    def _update_seeds_sparse(self, new_seeds, seed_offset):
         for seed_id, coords in new_seeds.items():
             self._seeds[coords] = seed_id
 
-    def update_seeds(self, new_seeds):
+    def update_seeds(self, new_seeds, seed_offset=0):
         if isinstance(new_seeds, np.ndarray):
-            self._updated_seeds_dense(new_seeds)
+            self._update_seeds_dense(new_seeds, seed_offset)
         elif isinstance(new_seeds, dict):
-            self._update_seeds_sparse(new_seeds)
+            self._update_seeds_sparse(new_seeds, seed_offset)
         else:
             raise ValueError("new_seeds must be np.ndarray or dict, got %s" % type(new_seeds))
         self._grid_graph.update_seeds(self._seeds)
-        self._update_graph()
 
     def clear_seeds(self):
         self._grid_graph.clear_seeds()
@@ -107,6 +113,7 @@ class InteractiveMWS():
     #
 
     def __call__(self):
+        self._update_graph()
         n_nodes = self._grid_graph.n_nodes
         # TODO if we have locked seeds / segments, we need to mask them here
         seg = compute_mws_clustering(n_nodes, self._uvs, self._mutex_uvs,

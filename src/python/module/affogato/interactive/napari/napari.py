@@ -7,6 +7,7 @@ import napari
 from vispy.color import Colormap
 
 from ...segmentation import InteractiveMWS
+from .mws_with_seeds import mws_with_seeds
 
 # TODO don't use elf functionality
 from elf.segmentation.utils import seg_to_edges
@@ -65,6 +66,8 @@ class InteractiveNapariMWS:
         self.imws = InteractiveMWS(affs, offsets, n_attractive_channels=ndim,
                                    strides=strides, randomize_strides=randomize_strides)
         self.show_edges = show_edges
+        self._split_mode_id = None
+        self._split_mask = None
 
         self.run()
 
@@ -92,6 +95,10 @@ class InteractiveNapariMWS:
         pos = self.get_cursor_position(viewer, layer_name='segmentation')
         val = viewer.layers['segmentation'].data[pos]
         return val
+
+    @property
+    def splt_mode_active(self):
+        return self._split_mode_id is not None
 
     def run(self):
         # get the initial mws segmentation
@@ -129,10 +136,9 @@ class InteractiveNapariMWS:
             def update(viewer):
                 self.update_impl(viewer)
 
-            # TODO
             @viewer.bind_key('s')
             def toggle_split_mode(viewer):
-                pass
+                self.toggle_split_mode_impl(viewer)
 
             @viewer.bind_key('a')
             def attach(viewer):
@@ -216,25 +222,51 @@ class InteractiveNapariMWS:
         print(f"Attaching {attach_id} to {selected_id}...")
         n_merge = self.imws.merge(seg_layer.data, selected_id, attach_id)
         if n_merge > 0:
-            print("Press [u] to update the segmentation accordingly.")
+            print("Press [u] to see the changes in the segmentation.")
         else:
             print("Could not attach, because the two ids are not touching.")
 
-    def update_impl(self, viewer):
-        print("Update mws triggered")
+    def toggle_split_mode_impl(self, viewer):
         layers = viewer.layers
-        seeds = layers['seeds'].data
-
         seg_layer = layers['segmentation']
-        print("Clearing seeds ...")
-        self.imws.clear_seeds()
 
-        print("Updating seeds ...")
-        self.imws.update_seeds(seeds)
+        # the split mode is active -> turn it of and update the segmentation
+        if self.splt_mode_active:
+            self._split_mode_id = None
+            self.update_impl(viewer)
+            self._split_mask = None
 
-        print("Recomputing segmentation from seeds ...")
+            seed_layer = layers['seeds']
+            seed_layer.data = np.zeros_like(seg_layer.data)
+            seed_layer.refresh()
+
+        # the split mode is inactive -> turn it on
+        else:
+            selected_id = seg_layer.selected_label
+            self._split_mode_id = selected_id
+            print("Activate split mode for segment", selected_id)
+
+            seg = seg_layer.data
+            self._split_mask = (seg == selected_id)
+            seg[~self._split_mask] = 0
+            seg_layer.data = seg
+            seg_layer.refresh()
+
+    def _update_normal(self, viewer):
+        layers = viewer.layers
+        seg_layer = layers['segmentation']
+
+        # if we have a split mask, the split mode was
+        # just toggled off and we need to update our seeds
+        if self._split_mask is not None:
+            print("Update triggered after split mode toggle, new seeds will be added")
+            seeds = layers['seeds'].data
+            seeds[~self._split_mask] = 0
+            seed_offset = self.imws.max_seed_id
+            self.imws.update_seeds(seeds, seed_offset=seed_offset)
+
+        print("Recomputing segmentation")
         seg = self.imws()
-        print("... done")
 
         seg_layer.data = seg
         seg_layer.refresh()
@@ -248,3 +280,27 @@ class InteractiveNapariMWS:
         aff_layer = layers['affinities']
         aff_layer.data = self.imws.affinities
         aff_layer.refresh()
+
+    def _update_split_mode(self, viewer):
+        layers = viewer.layers
+        seeds = layers['seeds'].data
+        mask = self._split_mask
+        seeds[~mask] = 0
+
+        # TODO keep same id as seeds!
+        seg = mws_with_seeds(self.imws.affinities, self.imws.offsets, seeds,
+                             strides=self.imws.strides,
+                             randomize_strides=self.imws.randomize_strides,
+                             mask=mask)
+
+        seg_layer = layers['segmentation']
+        seg_layer.data = seg
+        seg_layer.refresh()
+
+    def update_impl(self, viewer):
+        if self.splt_mode_active:
+            print("Update triggered in split mode ...")
+            self._update_split_mode(viewer)
+        else:
+            print("Update triggered in normal mode ...")
+            self._update_normal(viewer)
