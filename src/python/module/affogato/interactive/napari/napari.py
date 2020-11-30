@@ -145,7 +145,7 @@ class InteractiveNapariMWS:
             def attach(viewer):
                 self.attach_impl(viewer)
 
-            @viewer.bind_key('l')
+            @viewer.bind_key('t')
             def toggle_lock(viewer):
                 self.toggle_lock_impl(viewer)
 
@@ -220,14 +220,62 @@ class InteractiveNapariMWS:
 
     def select_next_seed(self, viewer):
         layer = viewer.layers['seeds']
+        next_label = layer.data.max() + 1
+
         viewer.layers.unselect_all()
         layer.selected = True
-        next_label = self.imws.max_seed_id + 1
         layer.mode = 'paint'
         layer.selected_label = next_label
 
     def toggle_lock_impl(self, viewer):
-        pass
+        if self.split_mode_active:
+            print("Cannot toggle lock while the split mode is active")
+            return
+
+        lock_id = self.get_id_under_cursor(viewer)
+        if lock_id in self.imws.locked_seeds:
+            print("Removing", lock_id, "from locked segments")
+            self.imws.unlock_seeds({lock_id})
+        else:
+            # make sure we have a seed for this segment, otherwise locking doesn't work
+            lock_id = self.ensure_seed(viewer, lock_id)
+            print("Adding", lock_id, "to locked segments")
+            self.imws.lock_seeds({lock_id})
+
+        self.update_mask(viewer)
+
+    def ensure_seed(self, viewer, seg_id):
+        seed_layer = viewer.layers['seeds']
+        seeds = seed_layer.data
+        last_seed = seeds.max()
+        # if seg-id is smaller equal than our last seed id
+        # it already has a seed and we don't need to do anything
+        if seg_id <= last_seed:
+            return seg_id
+
+        # otherwise, we need to place a seed in the object
+        # and update the segmentation
+        else:
+            next_seed = last_seed + 1
+            seg = viewer.layers['segmentation'].data
+
+            # TODO make a brush (skimage.draw.circle) instead of a single pixel
+            coords = np.where(seg == seg_id)
+            seed_coord_id = np.random.choice(len(coords[0]))
+            seed_coord = tuple(coord[seed_coord_id] for coord in coords)
+
+            seeds[seed_coord] = next_seed
+            seed_layer.refresh()
+
+            self._update_normal(viewer)
+            return next_seed
+
+    def update_mask(self, viewer):
+        layers = viewer.layers
+        seg = layers['segmentation'].data
+        mask_layer = layers['locked-segment-mask']
+        mask_layer.data = np.isin(seg, list(self.imws.locked_seeds))
+        mask_layer.refresh()
 
     def attach_impl(self, viewer):
         seg_layer = viewer.layers['segmentation']
@@ -244,7 +292,6 @@ class InteractiveNapariMWS:
         layers = viewer.layers
         seg_layer = layers['segmentation']
 
-        # TODO disallow selecting seeds (if possible)
         # the split mode is active -> turn it of and update the segmentation
         if self.split_mode_active:
             self._split_mode_id = None

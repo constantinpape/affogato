@@ -22,8 +22,7 @@ class InteractiveMWS():
         # comppute the initial graph shape (= uv-ids, mutex-uv-ids, ...)
         self._update_graph()
 
-        # TODO
-        self._locked_seeds = {}
+        self._locked_seeds = set()
 
     @property
     def shape(self):
@@ -128,6 +127,10 @@ class InteractiveMWS():
     #
     # locked segment functionality
     #
+
+    @property
+    def locked_seeds(self):
+        return self._locked_seeds
 
     def lock_seeds(self, locked_seeds):
         self._locked_seeds.update(locked_seeds)

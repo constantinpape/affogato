@@ -38,8 +38,8 @@ def mws_with_seeds(affs, offsets, seeds, strides,
     # compute the segmentation
     n_nodes = grid_graph.n_nodes
     seg = compute_mws_clustering(n_nodes, uvs, mutex_uvs, weights, mutex_weights)
-    # TODO keep same id as seeds!
     relabelConsecutive(seg, out=seg, start_label=1, keep_zeros=mask is not None)
+    grid_graph.relabel_to_seeds(seg)
     seg = seg.reshape(shape)
     if mask is not None:
         seg[np.logical_not(mask)] = 0
