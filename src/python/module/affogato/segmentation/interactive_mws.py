@@ -70,17 +70,21 @@ class InteractiveMWS():
         self._seeds[seed_mask] = (new_seeds[seed_mask] + seed_offset)
 
     def _update_seeds_sparse(self, new_seeds, seed_offset):
+        new_seeds_array = np.zeros_like(self._seeds)
         for seed_id, coords in new_seeds.items():
-            self._seeds[coords] = seed_id
+            new_id = seed_id + seed_offset
+            self._seeds[coords] = new_id
+            new_seeds_array[coords] = new_id
+        return new_seeds_array
 
     def update_seeds(self, new_seeds, seed_offset=0):
         if isinstance(new_seeds, np.ndarray):
             self._update_seeds_dense(new_seeds, seed_offset)
         elif isinstance(new_seeds, dict):
-            self._update_seeds_sparse(new_seeds, seed_offset)
+            new_seeds = self._update_seeds_sparse(new_seeds, seed_offset)
         else:
             raise ValueError("new_seeds must be np.ndarray or dict, got %s" % type(new_seeds))
-        self._grid_graph.update_seeds(self._seeds)
+        self._grid_graph.update_seeds(new_seeds)
 
     def clear_seeds(self):
         self._grid_graph.clear_seeds()

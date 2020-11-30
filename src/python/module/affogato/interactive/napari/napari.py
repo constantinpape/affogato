@@ -157,6 +157,12 @@ class InteractiveNapariMWS:
             def print_help(viewer):
                 _print_help()
 
+            # TODO select it instead of printing
+            # next seed id
+            @viewer.bind_key('n')
+            def next_seed(viewer):
+                print(self.get_next_seed_id())
+
             # # save the current segmentation
             # @viewer.bind_key('s')
             # def save_segmentation(viewer):
@@ -212,6 +218,9 @@ class InteractiveNapariMWS:
         print("Passed")
         return True
 
+    def get_next_seed_id(self):
+        return self.imws.max_seed_id + 1
+
     def training_step_impl(self, viewer):
         pass
 
@@ -230,16 +239,14 @@ class InteractiveNapariMWS:
         layers = viewer.layers
         seg_layer = layers['segmentation']
 
+        # TODO set segmentation layer to active
         # the split mode is active -> turn it of and update the segmentation
         if self.splt_mode_active:
             self._split_mode_id = None
             self.update_impl(viewer)
             self._split_mask = None
 
-            seed_layer = layers['seeds']
-            seed_layer.data = np.zeros_like(seg_layer.data)
-            seed_layer.refresh()
-
+        # TODO set seed layer to active and select the next available seed in paint mode
         # the split mode is inactive -> turn it on
         else:
             selected_id = seg_layer.selected_label
@@ -260,10 +267,9 @@ class InteractiveNapariMWS:
         # just toggled off and we need to update our seeds
         if self._split_mask is not None:
             print("Update triggered after split mode toggle, new seeds will be added")
-            seeds = layers['seeds'].data
+            seeds = layers['seeds'].data.copy()
             seeds[~self._split_mask] = 0
-            seed_offset = self.imws.max_seed_id
-            self.imws.update_seeds(seeds, seed_offset=seed_offset)
+            self.imws.update_seeds(seeds)
 
         print("Recomputing segmentation")
         seg = self.imws()
@@ -283,7 +289,7 @@ class InteractiveNapariMWS:
 
     def _update_split_mode(self, viewer):
         layers = viewer.layers
-        seeds = layers['seeds'].data
+        seeds = layers['seeds'].data.copy()
         mask = self._split_mask
         seeds[~mask] = 0
 
