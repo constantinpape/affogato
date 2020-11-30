@@ -1,5 +1,6 @@
 import numpy as np
 from ._segmentation import compute_mws_clustering, MWSGridGraph
+from ..affinities import compute_affinities_with_lut
 
 
 # TODO support a data backend like zarr etc.
@@ -32,7 +33,6 @@ class InteractiveMWS():
     def ndim(self):
         return len(self.shape)
 
-
     #
     # update the graph
     #
@@ -46,10 +46,11 @@ class InteractiveMWS():
 
         # compute the repulsive edges
         self._grid_graph.add_attractive_seed_edges = False
-        self._mutex_uvs, self._mutex_weights = self._grid_graph.compute_nh_and_weights(self._affinities[self._n_attractive:],
-                                                                                       self._offsets[self._n_attractive:],
-                                                                                       strides=self.strides,
-                                                                                       randomize_strides=self.randomize_strides)
+        (self._mutex_uvs,
+         self._mutex_weights) = self._grid_graph.compute_nh_and_weights(self._affinities[self._n_attractive:],
+                                                                        self._offsets[self._n_attractive:],
+                                                                        strides=self.strides,
+                                                                        randomize_strides=self.randomize_strides)
     #
     # seed functionality
     #
@@ -78,6 +79,28 @@ class InteractiveMWS():
     def clear_seeds(self):
         self._grid_graph.clear_seeds()
         self._seeds = np.zeros(self.shape, dtype='uint64')
+
+    def merge(self, seg, ida, idb):
+
+        seg_mask = np.isin(seg, [ida, idb])
+        bb = np.where(seg_mask)
+        bb = tuple(slice(b.min(), b.max() + 1) for b in bb)
+        seg_sub = seg[bb]
+
+        # computing the affmask for the bounding box of the two segment ids
+        keys = np.array([[min(ida, idb), max(ida, idb)]], dtype='uint64')
+        vals = np.array([1.], dtype='float32')
+        aff_mask, _ = compute_affinities_with_lut(seg_sub, self._offsets, keys, vals,
+                                                  default_val=0)
+        aff_mask = aff_mask.astype('bool')
+        n_mask = aff_mask.sum()
+
+        # we only need to change the affinities if there is something in the mask
+        if n_mask > 0:
+            bb = (slice(None),) + bb
+            self._affinities[bb][aff_mask] = 0
+
+        return n_mask
 
     #
     # segmentation functionality

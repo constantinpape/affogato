@@ -10,8 +10,10 @@ def _print_help():
     print("Interactive Mutex Watershed Application")
     print("Keybindigns:")
     print("[u] update segmentation")
-    print("[s] save current segmentation to h5")
-    print("[v] save current seeds to h5")
+    print("[s] split mode for selected segment (split by painting seeds)")
+    print("[a] attach segment under cursor to selected segment")
+    # print("[s] save current segmentation to h5")
+    # print("[v] save current seeds to h5")
     print("[y] test consistency if seeds and segmentation")
     print("[h] show help")
 
@@ -58,13 +60,38 @@ class InteractiveNapariMWS:
 
         self.run()
 
+    def get_cursor_position(self, viewer, layer_name):
+        position = None
+        scale = None
+        layer_scale = None
+
+        for layer in viewer.layers:
+            if layer.selected:
+                position = layer.coordinates
+                scale = layer.scale
+            if layer.name == layer_name:
+                layer_scale = layer.scale
+
+        assert position is not None
+        scale = (1, 1, 1) if scale is None else scale
+        layer_scale = (1, 1, 1) if layer_scale is None else layer_scale
+
+        rel_scale = [sc / lsc for lsc, sc in zip(layer_scale, scale)]
+        position = tuple(int(pos * sc) for pos, sc in zip(position, rel_scale))
+        return position
+
+    def get_id_under_cursor(self, viewer):
+        pos = self.get_cursor_position(viewer, layer_name='segmentation')
+        val = viewer.layers['segmentation'].data[pos]
+        return val
+
     def run(self):
         # get the initial mws segmentation
         seg = self.imws()
 
         # initialize save paths for segmentation and seeds
-        seg_path = None
-        seed_path = None
+        # seg_path = None
+        # seed_path = None
         _print_help()
 
         # add initial layers to the viewer
@@ -73,36 +100,25 @@ class InteractiveNapariMWS:
 
             # add image layers and point layer for seeds
             viewer.add_image(self.raw, name='raw')
+            viewer.add_image(self.imws.affinities, name='affinities', visible=False)
             viewer.add_labels(seg, name='segmentation')
             viewer.add_labels(np.zeros_like(seg), name='seeds')
 
             # add key-bindings
 
-            # update segmentation by re-running mws
+            # update affinities and segmentation
             @viewer.bind_key('u')
-            def update_mws(viewer):
-                self.update_mws_impl(viewer)
+            def update(viewer):
+                self.update_impl(viewer)
 
-            # save the current segmentation
+            # TODO
             @viewer.bind_key('s')
-            def save_segmentation(viewer):
-                nonlocal seg_path
-                seg_path = _read_file_path(seg_path)
-                seg = viewer.layers['segmentation'].data
-                _save(seg_path, seg)
+            def toggle_split_mode(viewer):
+                pass
 
-            # save the current seeds
-            @viewer.bind_key('v')
-            def save_seeds(viewer):
-                nonlocal seed_path
-                seed_path = _read_file_path(seed_path)
-                seeds = viewer.layers['seeds'].data
-                _save(seed_path, seeds)
-
-            # save the current seeds
-            @viewer.bind_key('t')
-            def training_step(viewer):
-                self.training_step_impl(viewer)
+            @viewer.bind_key('a')
+            def attach(viewer):
+                self.attach_impl(viewer)
 
             @viewer.bind_key('y')
             def test_consistency(viewer):
@@ -116,6 +132,26 @@ class InteractiveNapariMWS:
             @viewer.bind_key('h')
             def print_help(viewer):
                 _print_help()
+
+            # # save the current segmentation
+            # @viewer.bind_key('s')
+            # def save_segmentation(viewer):
+            #     nonlocal seg_path
+            #     seg_path = _read_file_path(seg_path)
+            #     seg = viewer.layers['segmentation'].data
+            #     _save(seg_path, seg)
+
+            # # save the current seeds
+            # @viewer.bind_key('v')
+            # def save_seeds(viewer):
+            #     nonlocal seed_path
+            #     seed_path = _read_file_path(seed_path)
+            #     seeds = viewer.layers['seeds'].data
+            #     _save(seed_path, seeds)
+
+            # @viewer.bind_key('t')
+            # def training_step(viewer):
+            #     self.training_step_impl(viewer)
 
     def _test_consistency(self, seg, seeds):
         # check shapes
@@ -155,7 +191,18 @@ class InteractiveNapariMWS:
     def training_step_impl(self, viewer):
         pass
 
-    def update_mws_impl(self, viewer):
+    def attach_impl(self, viewer):
+        seg_layer = viewer.layers['segmentation']
+        selected_id = seg_layer.selected_label
+        attach_id = self.get_id_under_cursor(viewer)
+        print(f"Attaching {attach_id} to {selected_id}...")
+        n_merge = self.imws.merge(seg_layer.data, selected_id, attach_id)
+        if n_merge > 0:
+            print("Press [u] to update the segmentation accordingly.")
+        else:
+            print("Could not attach, because the two ids are not touching.")
+
+    def update_impl(self, viewer):
         print("Update mws triggered")
         layers = viewer.layers
         seeds = layers['seeds'].data
@@ -163,11 +210,17 @@ class InteractiveNapariMWS:
         seg_layer = layers['segmentation']
         print("Clearing seeds ...")
         self.imws.clear_seeds()
-        # FIXME this takes much to long, something is wrong here
+
         print("Updating seeds ...")
         self.imws.update_seeds(seeds)
+
         print("Recomputing segmentation from seeds ...")
         seg = self.imws()
         print("... done")
+
         seg_layer.data = seg
         seg_layer.refresh()
+
+        aff_layer = layers['affinities']
+        aff_layer.data = self.imws.affinities
+        aff_layer.refresh()
