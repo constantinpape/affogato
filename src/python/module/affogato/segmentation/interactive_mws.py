@@ -44,7 +44,11 @@ class InteractiveMWS():
     # update the graph
     #
 
-    def _update_graph(self):
+    def _update_graph(self, mask=None):
+        if mask is not None:
+            self._grid_graph.clear_mask()
+            self._grid_graph.set_mask(mask)
+
         # compute the attractive edges
         # we set to > 1 to make sure these are the very first in priority
         self._grid_graph.add_attractive_seed_edges = True
@@ -115,12 +119,24 @@ class InteractiveMWS():
     # segmentation functionality
     #
 
-    def __call__(self):
-        self._update_graph()
+    def __call__(self, prev_seg=None):
+        # if we are passed a previous segmentation, we use it
+        # to mask with the locked_seeds
+        if prev_seg is not None and self._locked_seeds:
+            mask = ~np.isin(prev_seg, list(self._locked_seeds))
+        else:
+            mask = None
+
+        self._update_graph(mask=mask)
         n_nodes = self._grid_graph.n_nodes
-        # TODO if we have locked seeds / segments, we need to mask them here
         seg = compute_mws_clustering(n_nodes, self._uvs, self._mutex_uvs,
                                      self._weights, self._mutex_weights)
+
+        # retrieve the old segmentation
+        if mask is not None:
+            mask = ~mask
+            seg[mask.ravel()] = (prev_seg[mask] + seg.max())
+
         seg = self._grid_graph.relabel_to_seeds(seg)
         return seg.reshape(self.shape)
 
