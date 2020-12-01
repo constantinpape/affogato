@@ -1,15 +1,17 @@
 import torch
 import torch.multiprocessing as mp
+from torchvision.utils import make_grid
 
 from inferno.extensions.criteria import SorensenDiceLoss
 
 # TODO don't use elf functionality
 from elf.segmentation.utils import normalize_input
 
-from ..affinities import compute_affinities
+from affogato.affinities import compute_affinities
 from .napari import InteractiveNapariMWS
 
 
+# TODO tiling and not hard-coded len
 class DefaultDataset(torch.utils.data.Dataset):
     """ Simple default dataset for generating affinities
     from segmentation and mask.
@@ -17,14 +19,23 @@ class DefaultDataset(torch.utils.data.Dataset):
     def __init__(self, raw, seg, mask, offsets):
         self.raw = raw
 
-        # TODO ignore label etc.
-        affs, aff_mask = compute_affinities(seg, offsets)
+        seg[~mask] = 0
+        affs, aff_mask = compute_affinities(seg, offsets, have_ignore_label=True)
+        aff_mask = aff_mask.astype('bool')
+        affs = 1. - affs
+
+        mask_transition, aff_mask2 = compute_affinities(mask, offsets)
+        mask_transition[~aff_mask2.astype('bool')] = 1
+        aff_mask[~mask_transition.astype('bool')] = True
 
         self.affs = affs
         self.aff_mask = aff_mask
 
     def __getitem__(self, index):
-        return self.raw, self.affs, self.aff_mask
+        raw = self.raw[None]
+        affs = self.affs
+        aff_mask = self.aff_mask
+        return raw, affs, aff_mask
 
     def __len__(self):
         return 1
@@ -35,45 +46,81 @@ class MaskedLoss(torch.nn.Module):
         super().__init__()
         self.criterion = SorensenDiceLoss()
 
-    # TODO do the masking !
-    def foward(self, pred, y, mask):
-        loss = self.criterion(pred, y)
+    def forward(self, pred, y, mask):
+        mask.requires_grad = False
+        masked_prediction = pred * mask
+        loss = self.criterion(masked_prediction, y)
         return loss
 
 
-# TODO start a tensorboard
-def default_training(net, raw, seg, mask, offsets, keep_training):
+def default_training(proc_id, net, raw, seg, mask, offsets, pipe, device, step):
     ds = DefaultDataset(raw, seg, mask, offsets)
     loader = torch.utils.data.DataLoader(ds, batch_size=1)
 
+    p_out, p_in = pipe
+
     optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
     loss = MaskedLoss()
-    loss = loss.to(net.device)
+    loss = loss.to(device)
 
-    while keep_training:
+    logger = torch.utils.tensorboard.SummaryWriter('./runs/imws')
+
+    add_gradients = True
+
+    net.train()
+    print("Start training")
+    while True:
+        if p_out.poll():
+            if not p_out.recv():
+                p_in.send(step)
+                break
+
         for x, y, mask in loader:
-            x = x.to(net.device)
-            y, mask = y.to(net.device), mask.to(net.device)
+            x = x.to(device)
+            y, mask = y.to(device), mask.to(device)
 
             optimizer.zero_grad()
 
             pred = net(x)
+            pred.retain_grad()
+
             loss_val = loss(pred, y, mask)
             loss_val.backward()
-
             optimizer.step()
+
+            logger.add_scalar("loss", loss_val.item(), step)
+
+        step += 1
+        # if step % 10 == 0:
+        if step % 1 == 0:
+            print("Background training process iteration", step)
+            logger.add_image('input', x[0].detach().cpu(), step)
+            y = y[0].detach().cpu()
+
+            if add_gradients:
+                grads = pred.grad[0].detach().cpu()
+                grads -= grads.min()
+                grads /= grads.max()
+            pred = torch.clamp(pred[0].detach().cpu(), 0.001, 0.999)
+            tandp = [target.unsqueeze(0) for target in y]
+            nrow = len(tandp)
+            tandp.extend([p.unsqueeze(0) for p in pred])
+
+            if add_gradients:
+                tandp.extend([grad.unsqueeze(0) for grad in grads])
+            tandp = make_grid(tandp, nrow=nrow)
+            logger.add_image('target_and_prediction', tandp, step)
 
 
 # TODO support passing initial pool of training data
 class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
-    @staticmethod
     def run_prediction(self, data, net, normalizer):
         net.eval()
         with torch.no_grad():
             inp = normalizer(data)
             # we assume we need to add channel and batch axis
-            inp = torch.from_numpy(data[None, None])
-            affs = net(inp.to(net.device))
+            inp = torch.from_numpy(inp[None, None])
+            affs = net(inp.to(self.device))
             affs = affs.cpu().numpy().squeeze()
         return affs
 
@@ -81,6 +128,7 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
                  raw,
                  net,
                  offsets,
+                 device,
                  strides=None,
                  randomize_strides=True,
                  show_edges=True,
@@ -88,12 +136,14 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
                  training_function=default_training):
         self._net = net
         # self._net.shared_memory()
+        self.device = device
 
-        self._normalzer = normalizer
-        affs = self.predict(raw, self._net, self._normalizer)
-        super().__init__(raw, affs, offsets,
-                         strides=strides, randomize_strides=randomize_strides,
-                         show_edges=show_edges)
+        self._normalizer = normalizer
+        affs = self.run_prediction(raw, self._net, self._normalizer)
+
+        # FIXME dirty hack
+        bias = 0.6
+        affs[2:] += bias
 
         # variables for training
         self.training_function = training_function
@@ -103,15 +153,22 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
         # TODO allow setting this with initial data
         self._training_pool = []
 
+        self.p_out, self.p_in = mp.Pipe()
+        self.training_steps = 0
+
+        super().__init__(raw, affs, offsets,
+                         strides=strides, randomize_strides=randomize_strides,
+                         show_edges=show_edges)
+
     def add_keybindings(self, viewer):
         super().add_keybindings(viewer)
 
-        @viewer.bind_key('p')
+        @viewer.bind_key('Shift-P')
         def predict(viewer):
             print("Rerun prediction")
             layers = viewer.layers
             raw = layers['raw'].data
-            affs = self.run_prediction(raw, self._net, self.normalizer)
+            affs = self.run_prediction(raw, self._net, self._normalizer)
             self.imws.affinities = affs
 
             aff_layer = layers['affinities']
@@ -120,7 +177,7 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
             print("""Affinities were updated from the prediction.
                      Press [u] to see the changes in the segmentation.""")
 
-        @viewer.bind_key('SHIFT + T')
+        @viewer.bind_key('Shift-T')
         def update_training(viewer):
             self.update_training_impl(viewer)
 
@@ -135,14 +192,15 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
             return
 
         seg = layers['segmentation'].data.copy()
-        raw = self.normalizer(layers['raw'].data)
+        raw = self._normalizer(layers['raw'].data)
 
         # stop the training process if it is running
         if self.training_process is not None:
-            self.keep_training.value = 0
+            self.p_in.send(0)
             self.training_process.join()
+            self.training_steps = self.p_out.recv()
 
-        self.keep_training.value = 1
+        self.p_in.send(1)
         self.training_process = mp.spawn(
             self.training_function,
             args=(
@@ -150,8 +208,10 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
                 raw,
                 seg,
                 mask,
-                self.offsets,
-                self.keep_training
+                self.imws.offsets,
+                (self.p_out, self.p_in),
+                self.device,
+                self.training_steps
             ),
             nprocs=1,
             join=False
