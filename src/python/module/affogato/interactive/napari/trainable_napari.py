@@ -16,7 +16,7 @@ class DefaultDataset(torch.utils.data.Dataset):
     """ Simple default dataset for generating affinities
     from segmentation and mask.
     """
-    path_shape = [512, 512]  # TODO expose this and other parameters
+    patch_shape = [512, 512]  # TODO expose this and other parameters
 
     def to_affinities(self, seg, mask):
         seg[~mask] = 0
@@ -38,26 +38,36 @@ class DefaultDataset(torch.utils.data.Dataset):
     def __init__(self, raw, seg, mask_ids, offsets, transforms=None):
         self.raw = raw
         self.seg = seg
-        self.mask = mask_ids
+        self.mask_ids = mask_ids
         self.offsets = offsets
         self.transforms = transforms
-        self.n_samples = self.estimate_n_samples(self.raw.shape, self.path_shape)
+        self.n_samples = self.estimate_n_samples(self.raw.shape, self.patch_shape)
 
     def __getitem__(self, index):
-        offset = [np.random.randint(0, sh - csh) if sh > csh else 0
-                  for sh, csh in zip(self.raw.shape, self.patch_shape)]
-        bb = tuple(slice(off, off + csh) for off, csh in zip(offset, self.patch_shape))
 
-        raw = self.raw[bb]
-        seg = self.seg[bb]
+        # TODO sample so that we are biased towards the mask
+        def sample_raw_seg_mask():
+            offset = [np.random.randint(0, sh - csh) if sh > csh else 0
+                      for sh, csh in zip(self.raw.shape, self.patch_shape)]
+            bb = tuple(slice(off, off + csh) for off, csh in zip(offset, self.patch_shape))
 
-        if self.transforms is not None:
-            raw, seg = self.transforms(raw, seg)
-        mask = np.isin(seg, self.mask_ids)
+            raw = self.raw[bb]
+            seg = self.seg[bb]
 
-        # some arbitrary but very small pixel threshold
-        if mask.sum() < 25:
-            return self[index + 1]
+            if self.transforms is not None:
+                raw, seg = self.transforms(raw, seg)
+
+            raw, seg = raw.copy(), seg.copy()
+            mask = np.isin(seg, self.mask_ids)
+
+            return raw, seg, mask
+
+        raw, seg, mask = sample_raw_seg_mask()
+
+        # TODO ensure that we have some in-mask area
+        # # some arbitrary but very small pixel threshold
+        # while mask.sum() < 25:
+        #     raw, seg, mask = sample_raw_seg_mask()
 
         # add channel dim
         raw = raw[None]
