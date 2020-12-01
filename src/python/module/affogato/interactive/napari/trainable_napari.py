@@ -91,8 +91,8 @@ def default_training(proc_id, net, raw, seg, mask, offsets, pipe, device, step):
             logger.add_scalar("loss", loss_val.item(), step)
 
         step += 1
-        # if step % 10 == 0:
-        if step % 1 == 0:
+        # if step % 1 == 0:
+        if step % 10 == 0:
             print("Background training process iteration", step)
             logger.add_image('input', x[0].detach().cpu(), step)
             y = y[0].detach().cpu()
@@ -101,6 +101,7 @@ def default_training(proc_id, net, raw, seg, mask, offsets, pipe, device, step):
                 grads = pred.grad[0].detach().cpu()
                 grads -= grads.min()
                 grads /= grads.max()
+
             pred = torch.clamp(pred[0].detach().cpu(), 0.001, 0.999)
             tandp = [target.unsqueeze(0) for target in y]
             nrow = len(tandp)

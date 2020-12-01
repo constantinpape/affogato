@@ -25,26 +25,9 @@ def _print_help():
     print("[h] show help")
 
 
-# TODO with auto completion
-# https://stackoverflow.com/questions/5637124/tab-completion-in-pythons-raw-input
-# https://gist.github.com/iamatypeofwalrus/5637895
-def _read_file_path(path):
-    if path is not None:
-        inp = input("Do you want to keep the save path and override the result? [y] / n: ")
-        if inp != 'n':
-            return path
-    path = input("Enter save path: ")
-    # TODO check for valid save folder
-    # save_folder = os.path.split(path)[0]
-    # if not os.path.exists(save_folder):
-    #     raise RuntimeError("Invalid folder %s" % save_folder)
-    return path
-
-
 def _save(path, data):
-    # TODO don't use 'w', but check if data exists instead
     with h5py.File(path, 'w') as f:
-        f.create_dataset('data', data=data, compression='gzip')
+        f.create_dataset('seg', data=data, compression='gzip')
 
 
 class InteractiveNapariMWS:
@@ -136,13 +119,15 @@ class InteractiveNapariMWS:
         def next_seed(viewer):
             self.select_next_seed(viewer)
 
-        # # save the current segmentation
-        # @viewer.bind_key('s')
-        # def save_segmentation(viewer):
-        #     nonlocal seg_path
-        #     seg_path = _read_file_path(seg_path)
-        #     seg = viewer.layers['segmentation'].data
-        #     _save(seg_path, seg)
+        # TODO ideally, we would use the napari save layer functionality,
+        # but for some reason this just saves a blank image for labels
+        # -> should make an issue about this!
+        @viewer.bind_key('Shift-S')
+        def save_segmentation(viewer):
+            seg_path = './seg_layer.h5'
+            print("Saving current segmentation to", seg_path)
+            seg = viewer.layers['segmentation'].data
+            _save(seg_path, seg)
 
         # # save the current seeds
         # @viewer.bind_key('v')
