@@ -100,6 +100,58 @@ class InteractiveNapariMWS:
     def split_mode_active(self):
         return self._split_mode_id is not None
 
+    def add_keybindings(self, viewer):
+        # update affinities and segmentation
+        @viewer.bind_key('u')
+        def update(viewer):
+            self.update_impl(viewer)
+
+        @viewer.bind_key('s')
+        def toggle_split_mode(viewer):
+            self.toggle_split_mode_impl(viewer)
+
+        @viewer.bind_key('a')
+        def attach(viewer):
+            self.attach_impl(viewer)
+
+        @viewer.bind_key('t')
+        def toggle_lock(viewer):
+            self.toggle_lock_impl(viewer)
+
+        @viewer.bind_key('y')
+        def test_consistency(viewer):
+            seeds = viewer.layers['seeds'].data
+            print("Test consistency of layers")
+            self._test_consistency(viewer.layers['segmentation'].data, seeds)
+            print("Test consistency of segmentation")
+            self._test_consistency(self.imws(), seeds)
+
+        # display help
+        @viewer.bind_key('h')
+        def print_help(viewer):
+            _print_help()
+
+        # next seed id
+        @viewer.bind_key('n')
+        def next_seed(viewer):
+            self.select_next_seed(viewer)
+
+        # # save the current segmentation
+        # @viewer.bind_key('s')
+        # def save_segmentation(viewer):
+        #     nonlocal seg_path
+        #     seg_path = _read_file_path(seg_path)
+        #     seg = viewer.layers['segmentation'].data
+        #     _save(seg_path, seg)
+
+        # # save the current seeds
+        # @viewer.bind_key('v')
+        # def save_seeds(viewer):
+        #     nonlocal seed_path
+        #     seed_path = _read_file_path(seed_path)
+        #     seeds = viewer.layers['seeds'].data
+        #     _save(seed_path, seeds)
+
     def run(self):
         # get the initial mws segmentation
         seg = self.imws()
@@ -131,57 +183,7 @@ class InteractiveNapariMWS:
             viewer.add_labels(seg, name='segmentation')
 
             # add key-bindings
-
-            # update affinities and segmentation
-            @viewer.bind_key('u')
-            def update(viewer):
-                self.update_impl(viewer)
-
-            @viewer.bind_key('s')
-            def toggle_split_mode(viewer):
-                self.toggle_split_mode_impl(viewer)
-
-            @viewer.bind_key('a')
-            def attach(viewer):
-                self.attach_impl(viewer)
-
-            @viewer.bind_key('t')
-            def toggle_lock(viewer):
-                self.toggle_lock_impl(viewer)
-
-            @viewer.bind_key('y')
-            def test_consistency(viewer):
-                seeds = viewer.layers['seeds'].data
-                print("Test consistency of layers")
-                self._test_consistency(viewer.layers['segmentation'].data, seeds)
-                print("Test consistency of segmentation")
-                self._test_consistency(self.imws(), seeds)
-
-            # display help
-            @viewer.bind_key('h')
-            def print_help(viewer):
-                _print_help()
-
-            # next seed id
-            @viewer.bind_key('n')
-            def next_seed(viewer):
-                self.select_next_seed(viewer)
-
-            # # save the current segmentation
-            # @viewer.bind_key('s')
-            # def save_segmentation(viewer):
-            #     nonlocal seg_path
-            #     seg_path = _read_file_path(seg_path)
-            #     seg = viewer.layers['segmentation'].data
-            #     _save(seg_path, seg)
-
-            # # save the current seeds
-            # @viewer.bind_key('v')
-            # def save_seeds(viewer):
-            #     nonlocal seed_path
-            #     seed_path = _read_file_path(seed_path)
-            #     seeds = viewer.layers['seeds'].data
-            #     _save(seed_path, seeds)
+            self.add_keybindings(viewer)
 
     def _test_consistency(self, seg, seeds):
         # check shapes
@@ -278,12 +280,17 @@ class InteractiveNapariMWS:
         mask_layer.refresh()
 
     def attach_impl(self, viewer):
-        seg_layer = viewer.layers['segmentation']
+        layers = viewer.layers
+        seg_layer = layers['segmentation']
         selected_id = seg_layer.selected_label
         attach_id = self.get_id_under_cursor(viewer)
         print(f"Attaching {attach_id} to {selected_id}...")
         n_merge = self.imws.merge(seg_layer.data, selected_id, attach_id)
+
         if n_merge > 0:
+            aff_layer = layers['affinities']
+            aff_layer.data = self.imws.affinities
+            aff_layer.refresh()
             print("Press [u] to see the changes in the segmentation.")
         else:
             print("Could not attach, because the two ids are not touching.")
