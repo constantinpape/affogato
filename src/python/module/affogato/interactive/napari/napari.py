@@ -13,18 +13,6 @@ from .mws_with_seeds import mws_with_seeds
 from elf.segmentation.utils import seg_to_edges
 
 
-def _print_help():
-    print("Interactive Mutex Watershed Application")
-    print("Keybindigns:")
-    print("[u] update segmentation")
-    print("[s] split mode for selected segment (split by painting seeds)")
-    print("[a] attach segment under cursor to selected segment")
-    # print("[s] save current segmentation to h5")
-    # print("[v] save current seeds to h5")
-    print("[y] test consistency if seeds and segmentation")
-    print("[h] show help")
-
-
 class InteractiveNapariMWS:
 
     def __init__(self,
@@ -114,18 +102,10 @@ class InteractiveNapariMWS:
         def toggle_lock(viewer):
             self.toggle_lock_impl(viewer)
 
-        @viewer.bind_key('y')
-        def test_consistency(viewer):
-            seeds = viewer.layers['seeds'].data
-            print("Test consistency of layers")
-            self._test_consistency(viewer.layers['segmentation'].data, seeds)
-            print("Test consistency of segmentation")
-            self._test_consistency(self.imws(), seeds)
-
         # display help
         @viewer.bind_key('h')
         def print_help(viewer):
-            _print_help()
+            self.print_help_impl()
 
         # TODO add a key binding that gets the seed for the currently selected segment
         # (either next if there is no seed for it or the segment id if there is a seed for it)
@@ -138,22 +118,41 @@ class InteractiveNapariMWS:
         def save_state(viewer):
             save_path = './imws_saved_state.h5'
             print("Saving current viewer state to", save_path)
+            self.save_state_impl(viewer, save_path)
 
-            seg = viewer.layers['segmentation'].data
-            seeds = viewer.layers['seeeds'].data
-            mask_ids = list(self.imws.locked_seeds)
+        # @viewer.bind_key('y')
+        # def test_consistency(viewer):
+        #     seeds = viewer.layers['seeds'].data
+        #     print("Test consistency of layers")
+        #     self._test_consistency(viewer.layers['segmentation'].data, seeds)
+        #     print("Test consistency of segmentation")
+        #     self._test_consistency(self.imws(), seeds)
 
-            # TODO don't open in w and allow for multiple checkpoints with time step
-            with h5py.File(save_path, 'w') as f:
-                f.create_dataset('segmentation', data=seg, compression='gzip')
-                f.create_dataset('seeds', data=seeds, compression='gzip')
-                f.create_dataset('mask_ids', data=mask_ids)
+    def save_state_impl(self, viewer, save_path):
+        seg = viewer.layers['segmentation'].data
+        seeds = viewer.layers['seeds'].data
+        mask_ids = list(self.imws.locked_seeds)
+
+        # TODO don't open in w and allow for multiple checkpoints with time stamp
+        with h5py.File(save_path, 'w') as f:
+            f.create_dataset('segmentation', data=seg, compression='gzip')
+            f.create_dataset('seeds', data=seeds, compression='gzip')
+            f.create_dataset('mask_ids', data=mask_ids)
+
+    def print_help_impl(self):
+        print("Interactive Mutex Watershed Keybindings")
+        print("[U] update segmentation")
+        print("[S] split mode for selected segment (split by painting seeds)")
+        print("[A] attach segment under cursor to selected segment")
+        print("[H] print help")
+        print("[T] toggle lock mode for segment under cursor")
+        print("[Shift-S] save state")
+        # print("[y] test consistency if seeds and segmentation")
 
     def run(self):
-        # get the initial mws segmentation
         seg, seeds, mask = self.get_initial_viewer_data()
 
-        _print_help()
+        self.print_help_impl()
 
         # add initial layers to the viewer
         with napari.gui_qt():

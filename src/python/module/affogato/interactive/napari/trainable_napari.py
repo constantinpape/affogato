@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 import torch.multiprocessing as mp
@@ -112,13 +113,13 @@ def default_training(proc_id, net,
     log_frequency = 10
 
     print("Start training")
+    net.train()
     while True:
         if p_out.poll():
             if not p_out.recv():
                 p_in.send(step)
                 break
 
-        net.train()
         for x, y, mask in loader:
             x = x.to(device)
             y, mask = y.to(device), mask.to(device)
@@ -164,6 +165,7 @@ def default_training(proc_id, net,
 # TODO add a reset button for affinities and the network
 class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
     def run_prediction(self, data, net, normalizer):
+        # TODO this should be wrapped in a process lock
         net.eval()
         with torch.no_grad():
             inp = normalizer(data)
@@ -171,6 +173,7 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
             inp = torch.from_numpy(inp[None, None])
             affs = net(inp.to(self.device))
             affs = affs.cpu().numpy().squeeze()
+        net.train()
         return affs
 
     def __init__(self,
@@ -274,3 +277,24 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
         if self.training_process is not None:
             self.p_in.send(0)
             self.training_process.join()
+
+    def save_state_impl(self, viewer, save_path):
+        super().save_state_impl(viewer, save_path)
+        # TODO it would be nicer to save to a buffer and then
+        # save (and load) this buffer from hdf5 to have everything in one file
+        model_save_path = os.path.splitext(save_path)[0] + '.torch'
+        torch.save(self._net.state_dict(), model_save_path)
+
+    def get_initial_viewer_data(self):
+        save_path = self._load_from
+        if save_path is not None:
+            model_save_path = os.path.splitext(save_path)[0] + '.torch'
+            if os.path.exists(model_save_path):
+                state_dict = torch.load(model_save_path)
+                self._net.load_state_dict(state_dict)
+        return super().get_initial_viewer_data()
+
+    def print_help_impl(self):
+        super().print_help_impl()
+        print("[Shift-T] start/update training using currently locked segments")
+        print("[Shift-P] repredict affinities with current weights")
