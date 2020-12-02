@@ -328,8 +328,7 @@ class InteractiveNapariMWS:
         self.imws.update_seeds(seeds)
 
         print("Recomputing segmentation")
-        # TODO keep same id as seeds!
-        seg = self.imws()
+        seg = self.imws(seg_layer.data)
 
         seg_layer.data = seg
         seg_layer.refresh()
@@ -350,7 +349,6 @@ class InteractiveNapariMWS:
         mask = self._split_mask
         seeds[~mask] = 0
 
-        # TODO keep same id as seeds!
         seg = mws_with_seeds(self.imws.affinities, self.imws.offsets, seeds,
                              strides=self.imws.strides,
                              randomize_strides=self.imws.randomize_strides,
