@@ -109,8 +109,8 @@ def default_training(proc_id, net,
     logger = torch.utils.tensorboard.SummaryWriter('./runs/imws')
 
     add_gradients = True
+    log_frequency = 10
 
-    net.train()
     print("Start training")
     while True:
         if p_out.poll():
@@ -118,6 +118,7 @@ def default_training(proc_id, net,
                 p_in.send(step)
                 break
 
+        net.train()
         for x, y, mask in loader:
             x = x.to(device)
             y, mask = y.to(device), mask.to(device)
@@ -134,10 +135,10 @@ def default_training(proc_id, net,
             logger.add_scalar("loss", loss_val.item(), step)
 
             step += 1
-            # if step % 1 == 0:
-            if step % 10 == 0:
+            if step % log_frequency == 0:
                 print("Background training process iteration", step)
-                logger.add_image('input', x[0].detach().cpu(), step)
+                x = x[0].detach().cpu()
+                logger.add_image('input', x, step)
                 y = y[0].detach().cpu()
 
                 if add_gradients:
@@ -154,6 +155,9 @@ def default_training(proc_id, net,
                     tandp.extend([grad.unsqueeze(0) for grad in grads])
                 tandp = make_grid(tandp, nrow=nrow)
                 logger.add_image('target_and_prediction', tandp, step)
+
+                # for debugging
+                # return x, y, pred, grads
 
 
 # TODO support passing initial pool of training data
@@ -181,7 +185,7 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
                  training_function=default_training,
                  transforms=None):
         self._net = net
-        # self._net.shared_memory()
+        # self._net.shared_memory()  # this might be necessary for gpu training
         self.device = device
 
         self._normalizer = normalizer
@@ -254,7 +258,7 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
                 self._net,
                 raw,
                 seg,
-                self.imws.locked_seeds,
+                list(self.imws.locked_seeds),
                 self.imws.offsets,
                 self.transforms,
                 (self.p_out, self.p_in),
@@ -264,3 +268,9 @@ class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
             nprocs=1,
             join=False
         )
+
+    def run(self):
+        super().run()
+        if self.training_process is not None:
+            self.p_in.send(0)
+            self.training_process.join()
