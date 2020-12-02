@@ -1,4 +1,4 @@
-# import os
+import os
 from itertools import product
 import numpy as np
 import h5py
@@ -25,11 +25,6 @@ def _print_help():
     print("[h] show help")
 
 
-def _save(path, data):
-    with h5py.File(path, 'w') as f:
-        f.create_dataset('seg', data=data, compression='gzip')
-
-
 class InteractiveNapariMWS:
 
     def __init__(self,
@@ -51,8 +46,26 @@ class InteractiveNapariMWS:
         self.show_edges = show_edges
         self._split_mode_id = None
         self._split_mask = None
+        self._load_from = None
 
-        self.run()
+    def load_from_state(self, state_path):
+        if not os.path.exists(state_path):
+            raise ValueError(f"Cannot find state path {state_path}")
+        self._load_from = state_path
+
+    def get_initial_viewer_data(self):
+        if self._load_from is None:
+            seg = self.imws()
+            seeds, mask = np.zeros_like(seg), np.zeros_like(seg)
+        else:
+            print("Initialize imws with state from", self._load_from)
+            with h5py.File(self._load_from, 'r') as f:
+                seg = f['segmentation'][:]
+                seeds = f['seeds'][:]
+                mask_ids = f['mask_ids'][:]
+            mask = np.isin(seg, mask_ids)
+            self.imws.lock_seeds(set(mask_ids))
+        return seg, seeds, mask
 
     def get_cursor_position(self, viewer, layer_name):
         position = None
@@ -114,36 +127,32 @@ class InteractiveNapariMWS:
         def print_help(viewer):
             _print_help()
 
+        # TODO add a key binding that gets the seed for the currently selected segment
+        # (either next if there is no seed for it or the segment id if there is a seed for it)
         # next seed id
         @viewer.bind_key('n')
         def next_seed(viewer):
             self.select_next_seed(viewer)
 
-        # TODO ideally, we would use the napari save layer functionality,
-        # but for some reason this just saves a blank image for labels
-        # -> should make an issue about this!
         @viewer.bind_key('Shift-S')
-        def save_segmentation(viewer):
-            seg_path = './seg_layer.h5'
-            print("Saving current segmentation to", seg_path)
-            seg = viewer.layers['segmentation'].data
-            _save(seg_path, seg)
+        def save_state(viewer):
+            save_path = './imws_saved_state.h5'
+            print("Saving current viewer state to", save_path)
 
-        # # save the current seeds
-        # @viewer.bind_key('v')
-        # def save_seeds(viewer):
-        #     nonlocal seed_path
-        #     seed_path = _read_file_path(seed_path)
-        #     seeds = viewer.layers['seeds'].data
-        #     _save(seed_path, seeds)
+            seg = viewer.layers['segmentation'].data
+            seeds = viewer.layers['seeeds'].data
+            mask_ids = list(self.imws.locked_seeds)
+
+            # TODO don't open in w and allow for multiple checkpoints with time step
+            with h5py.File(save_path, 'w') as f:
+                f.create_dataset('segmentation', data=seg, compression='gzip')
+                f.create_dataset('seeds', data=seeds, compression='gzip')
+                f.create_dataset('mask_ids', data=mask_ids)
 
     def run(self):
         # get the initial mws segmentation
-        seg = self.imws()
+        seg, seeds, mask = self.get_initial_viewer_data()
 
-        # initialize save paths for segmentation and seeds
-        # seg_path = None
-        # seed_path = None
         _print_help()
 
         # add initial layers to the viewer
@@ -163,11 +172,10 @@ class InteractiveNapariMWS:
                 ])
                 viewer.add_image(edges, name='edges', colormap=cmap, contrast_limits=[0, 1])
 
-            viewer.add_labels(np.zeros_like(seg), name='locked-segment-mask', visible=False)
-            viewer.add_labels(np.zeros_like(seg), name='seeds')
+            viewer.add_labels(mask, name='locked-segment-mask', visible=False)
+            viewer.add_labels(seeds, name='seeds')
             viewer.add_labels(seg, name='segmentation')
 
-            # add key-bindings
             self.add_keybindings(viewer)
 
     def _test_consistency(self, seg, seeds):

@@ -157,6 +157,7 @@ def default_training(proc_id, net,
 
 
 # TODO support passing initial pool of training data
+# TODO add a reset button for affinities and the network
 class TrainableInteractiveNapariMWS(InteractiveNapariMWS):
     def run_prediction(self, data, net, normalizer):
         net.eval()
