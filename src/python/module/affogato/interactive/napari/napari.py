@@ -34,6 +34,7 @@ class InteractiveNapariMWS:
         self.show_edges = show_edges
         self._split_mode_id = None
         self._split_mask = None
+        self._prev_seg = None
         self._load_from = None
 
     def load_from_state(self, state_path):
@@ -308,6 +309,7 @@ class InteractiveNapariMWS:
             print("Activate split mode for segment", selected_id)
 
             seg = seg_layer.data
+            self._prev_seg = seg.copy()
             self._split_mask = (seg == selected_id)
             seg[~self._split_mask] = 0
             seg_layer.data = seg
@@ -318,18 +320,17 @@ class InteractiveNapariMWS:
     def _update_normal(self, viewer):
         layers = viewer.layers
         seg_layer = layers['segmentation']
-
-        seeds = layers['seeds'].data
-        # if we are just coming from split mode we set
-        # the seeds outside the split mask to zero
-        if self._split_mask is not None:
-            seeds = seeds.copy()
-            seeds[~self._split_mask] = 0
-        self.imws.update_seeds(seeds)
+        seg = seg_layer.data
 
         print("Recomputing segmentation")
-        seg = self.imws(seg_layer.data)
+        seeds = layers['seeds'].data
+        self.imws.update_seeds(seeds)
 
+        # if we are just coming from split mode we need to recover
+        # the full segmentation
+        if self._split_mask is not None:
+            seg = self._prev_seg
+        seg = self.imws(seg)
         seg_layer.data = seg
         seg_layer.refresh()
 
@@ -343,6 +344,7 @@ class InteractiveNapariMWS:
         aff_layer.data = self.imws.affinities
         aff_layer.refresh()
 
+    # TODO we need to intersect the new seeds with the mask also in the storage
     def _update_split_mode(self, viewer):
         layers = viewer.layers
         seeds = layers['seeds'].data.copy()
