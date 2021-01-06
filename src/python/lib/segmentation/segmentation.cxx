@@ -10,6 +10,7 @@
 #include "affogato/segmentation/connected_components.hxx"
 #include "affogato/segmentation/zwatershed.hxx"
 #include "affogato/segmentation/grid_graph.hxx"
+#include "affogato/segmentation/graph_watershed.hxx"
 
 namespace py = pybind11;
 
@@ -53,6 +54,25 @@ PYBIND11_MODULE(_segmentation, m)
     }, py::arg("number_of_labels"),
        py::arg("uvs"), py::arg("mutex_uvs"),
        py::arg("weights"), py::arg("mutex_weights"));
+
+
+    m.def("graph_watershed_with_threshold",[](const xt::pytensor<uint64_t, 2> & uvs,
+                                              const xt::pytensor<float, 1> & weights,
+                                              const xt::pytensor<uint64_t, 1> & seeds,
+                                              const float threshold){
+        const std::size_t number_of_labels = seeds.size();
+        xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({(int64_t) number_of_labels});
+        {
+            py::gil_scoped_release allowThreads;
+            segmentation::graph_watershed_with_threshold(uvs, weights,
+                                                         seeds, threshold,
+                                                         node_labeling);
+        }
+        return node_labeling;
+    }, py::arg("uvs"),
+       py::arg("weights"),
+       py::arg("seeds"),
+       py::arg("threshold"));
 
 
     m.def("compute_mws_segmentation_impl",[](const xt::pytensor<int64_t, 1> & sorted_flat_indices,
