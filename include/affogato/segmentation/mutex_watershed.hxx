@@ -282,7 +282,7 @@ namespace segmentation {
                                const WEIGHT_ARRAY & edge_weights,
                                const VALID_ARRAY & valid_edges,
                                UFD & ufd,
-                               xt::pytensor<bool, 1> & visited,
+                               const xt::xtensor<bool, 1> & visited,
                                PRIORITY_QUEUE & pq){
 
         const uint64_t ru = ufd.find_set(position);
@@ -340,7 +340,7 @@ namespace segmentation {
         const size_t number_of_attractive_edges = number_of_nodes * number_of_attractive_channels;
         const size_t number_of_offsets = offsets.size();
         const size_t ndims = offsets[0].size();
-        xt::pytensor<bool, 1> visited = xt::zeros<bool>({edge_weights.size()});
+        xt::xtensor<bool, 1> visited = xt::zeros<bool>({edge_weights.size()});
 
         std::vector<int64_t> array_stride(ndims);
         int64_t current_stride = 1;

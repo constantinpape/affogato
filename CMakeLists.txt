@@ -35,8 +35,12 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" U_CMAKE_BUILD_TYPE)
 ##############################
 # Build options
 ##############################
+
+option(BUILD_PYTHON ON "Build python bindings with pybind11")
+option(BUILD_JS OFF "Build javascript bindings with emscripten")
+
 # adaptions to travis build
-option(WITHIN_TRAVIS OFF)
+option(WITHIN_TRAVIS OFF "Build within travis")
 
 
 ###############################
@@ -89,14 +93,16 @@ include_directories(${Boost_INCLUDE_DIR})
 # Python-bindings
 ###############################
 
-find_package(pybind11 REQUIRED)
-set(PYBIND11_CPP_STANDARD -std=c++14)
-
-find_package(NUMPY REQUIRED)
-include_directories(${NUMPY_INCLUDE_DIRS})
-
-find_package(xtensor-python REQUIRED)
-include_directories(${xtensor-python_INCLUDE_DIRS})
+if(BUILD_PYTHON)
+    find_package(pybind11 REQUIRED)
+    set(PYBIND11_CPP_STANDARD -std=c++14)
+    
+    find_package(NUMPY REQUIRED)
+    include_directories(${NUMPY_INCLUDE_DIRS})
+    
+    find_package(xtensor-python REQUIRED)
+    include_directories(${xtensor-python_INCLUDE_DIRS})
+endif()
 
 
 ###############################

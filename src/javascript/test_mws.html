@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Emscripten-Generated Code</title>
+
+    <script type="text/javascript" src="mws.js"></script>
+  </head>
+  <body>
+
+    <script>
+
+	  var n_chans = 4;
+      var w = 16;
+      var h = 16;
+      var n_weights = w * h * n_chans;
+      var n_nodes = w * h;
+
+      // weird stuff that is necessary to find the compiled code ...
+	  var Module = {
+           onRuntimeInitialized: function() {
+
+           // NOTE: I only managed to communicate between WASM and js via wrapped std::vectors
+           // to make this efficient we need a way to set the vector buffer to a js Float32Array (should be possible)
+           // create test weights
+           var weights = Module.create_float_vector(n_weights, true)
+           var offsets = Module.create_int_vector(n_chans * 2)
+
+           // TODO I am not sure if access via [] is safe here
+           // maybe need to use push_back
+           offsets[0] = -1;
+           offsets[1] = 0;
+           offsets[2] = 0;
+           offsets[3] = -1;
+           
+           offsets[4] = -3;
+           offsets[5] = 0;
+           offsets[6] = 0;
+           offsets[7] = -3;
+
+           var labels = Module.mutex_watershed_2d(weights,
+                                                  offsets,
+                                                  n_chans, h, w)
+           console.log("Here");
+           console.log(offsets[0]);
+           // NOTE can only access with 'get' here
+           console.log(labels.get(0));
+         }
+      };
+
+    </script>
+  </body>
+</html>

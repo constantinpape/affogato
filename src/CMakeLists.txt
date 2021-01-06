@@ -1,1 +1,6 @@
-add_subdirectory(python)
+if(BUILD_PYTHON)
+    add_subdirectory(python)
+endif()
+if(BUILD_JS)
+    add_subdirectory(javascript)
+endif()
