@@ -10,6 +10,7 @@
 #include "affogato/segmentation/connected_components.hxx"
 #include "affogato/segmentation/zwatershed.hxx"
 #include "affogato/segmentation/grid_graph.hxx"
+#include "affogato/segmentation/single_linkage.hxx"
 
 namespace py = pybind11;
 
@@ -80,6 +81,33 @@ PYBIND11_MODULE(_segmentation, m)
        py::arg("offsets"),
        py::arg("number_of_attractive_channels"),
        py::arg("image_shape"));
+
+
+    m.def("compute_mws_segmentation_v2_impl",[](const xt::pytensor<int64_t, 1> & sorted_flat_indices,
+                                             const xt::pytensor<bool, 1> & valid_edges,
+                                             const xt::pytensor<bool, 1> & mutex_edges,
+                                             const std::vector<std::vector<int>> & offsets,
+                                             const std::vector<int> & image_shape){
+              int64_t number_of_nodes = 1;
+              for (auto & s: image_shape){
+                  number_of_nodes *= s;
+              }
+              xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({number_of_nodes});
+              {
+                  py::gil_scoped_release allowThreads;
+                  segmentation::compute_mws_segmentation_v2(sorted_flat_indices,
+                                                         valid_edges,
+                                                         mutex_edges,
+                                                         offsets,
+                                                         image_shape,
+                                                         node_labeling);
+              }
+              return node_labeling;
+          }, py::arg("sorted_flat_indices"),
+          py::arg("valid_edges"),
+          py::arg("mutex_edges"),
+          py::arg("offsets"),
+          py::arg("image_shape"));
 
 
     m.def("compute_mws_prim_segmentation_impl",[](const xt::pytensor<float, 1> & edge_weights,
@@ -328,5 +356,22 @@ PYBIND11_MODULE(_segmentation, m)
           py::arg("strides")=std::vector<std::size_t>({1, 1, 1}),
           py::arg("randomize_strides")=true)
     ;
+
+    m.def("compute_single_linkage_clustering",[](const uint64_t number_of_labels,
+                                                 const xt::pytensor<uint64_t, 2> & uvs,
+                                                 const xt::pytensor<uint64_t, 2> & mutex_uvs,
+                                                 const xt::pytensor<float, 1> & weights,
+                                                 const xt::pytensor<float, 1> & mutex_weights){
+              xt::pytensor<uint64_t, 1> node_labeling = xt::zeros<uint64_t>({(int64_t) number_of_labels});
+              {
+                  py::gil_scoped_release allowThreads;
+                  segmentation::compute_single_linkage_clustering(number_of_labels, uvs,
+                                                    mutex_uvs, weights,
+                                                    mutex_weights, node_labeling);
+              }
+              return node_labeling;
+          }, py::arg("number_of_labels"),
+          py::arg("uvs"), py::arg("mutex_uvs"),
+          py::arg("weights"), py::arg("mutex_weights"));
 
 }
