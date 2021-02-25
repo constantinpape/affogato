@@ -99,7 +99,8 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
 
 
 def compute_mws_segmentation_from_signed_affinities(signed_affinities, offsets,
-                                                    foreground_mask=None, edge_mask=None):
+                                                    foreground_mask=None, edge_mask=None,
+                                                    return_valid_edge_mask=False):
     """
     :param signed_affinities: If the image is N-dimensional, this is a N+1 dimensional array of positive and
             negative values (where the first dimension is the "channel" dimension)
@@ -139,16 +140,21 @@ def compute_mws_segmentation_from_signed_affinities(signed_affinities, offsets,
         # increase labels by 1, so we don't merge anything with the mask
         labels += 1
         labels[inv_mask] = 0
-    return labels
+    if return_valid_edge_mask:
+        return labels, valid_edges
+    else:
+        return labels
 
 
 def compute_mws_segmentation_from_affinities(affinities, offsets,
                                              beta_parameter=0.5,
-                                             foreground_mask=None, edge_mask=None):
+                                             foreground_mask=None, edge_mask=None,
+                                             return_valid_edge_mask=False):
     """
     :param beta_parameter: Increase the parameter up to 1.0 to obtain a result biased towards over-segmentation.
                 Decrease it down to 0. to obtain a result biased towards under-segmentation
 
     """
     return compute_mws_segmentation_from_signed_affinities(affinities-beta_parameter, offsets,
-                                                           foreground_mask=foreground_mask, edge_mask=edge_mask)
+                                                           foreground_mask=foreground_mask, edge_mask=edge_mask,
+                                                           return_valid_edge_mask=return_valid_edge_mask)
