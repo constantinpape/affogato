@@ -15,21 +15,20 @@ using namespace emscripten;
 std::vector<int> mws_js_2d(
     const std::vector<float> & weights,
     const std::vector<int> & offsets_flat,
-    const int number_of_channels,
     const int h,
     const int w
 ) {
     
+    const int64_t number_of_channels = offsets_flat.size() / 2;
     const int64_t number_of_nodes = h * w;
     const int64_t number_of_edges = number_of_channels * number_of_nodes;
     // TODO hw or wh?
     const std::vector<int> image_shape({h, w}); 
     
     std::vector<std::vector<int>> offsets(number_of_channels);
-    int chan_offset = 0;
-    for(int chan_id = 0; chan_id < number_of_channels; ++chan_id, chan_offset+=2) {
-        std::vector<int> this_offset = {offsets_flat[chan_offset],
-                                        offsets_flat[chan_offset + 1]};
+    for(int chan_id = 0; chan_id < number_of_channels; ++chan_id) {
+        std::vector<int> this_offset = {offsets_flat[2*chan_id],
+                                        offsets_flat[2*chan_id + 1]};
         offsets[chan_id] = this_offset;
     }
 
@@ -66,12 +65,8 @@ std::vector<int> mws_js_2d(
 }
 
 
-// TODO implement random init
-std::vector<float> create_float_vector(const std::size_t n_weights, const bool initialise_random) {
+std::vector<float> create_float_vector(const std::size_t n_weights) {
     std::vector<float> weights(n_weights);
-    if(initialise_random) {
-
-    }
     return weights;
 }
 
