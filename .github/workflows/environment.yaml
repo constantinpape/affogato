@@ -1,0 +1,9 @@
+name: affogato-build-env
+channels:
+  - conda-forge
+dependencies:
+  - boost-cpp
+  - cmake
+  - compilers
+  - xtensor>=0.21,<0.22
+  - xtensor-python>=0.24,<0.25
