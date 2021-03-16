@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "xtensor/xarray.hpp"
 #include "xtensor/xadapt.hpp"
 #include "xtensor/xstrided_view.hpp"
