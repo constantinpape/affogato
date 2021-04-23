@@ -36,11 +36,11 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" U_CMAKE_BUILD_TYPE)
 # Build options
 ##############################
 
-option(BUILD_PYTHON ON "Build python bindings with pybind11")
-option(BUILD_JS OFF "Build javascript bindings with emscripten")
+option(BUILD_PYTHON "Build python bindings with pybind11" ON)
+option(BUILD_JS "Build javascript bindings with emscripten" OFF)
 
 # adaptions to travis build
-option(WITHIN_TRAVIS OFF "Build within travis")
+option(WITHIN_TRAVIS "Build within travis" OFF)
 
 
 ###############################
