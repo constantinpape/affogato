@@ -289,7 +289,7 @@ namespace segmentation {
         for(int i = 0; i < offset_strides.size(); ++i){
             // go in positive offset direction
             const uint64_t edge_id = position + i * number_of_nodes;
-            if (valid_edges(edge_id) and !visited(edge_id)){
+            if (valid_edges(edge_id) && !visited(edge_id)){
                 const uint64_t neighbour = position + offset_strides[i];
                 const uint64_t rv = ufd.find_set(neighbour);
                 if (ru != rv){
@@ -298,14 +298,14 @@ namespace segmentation {
             }
 
             // check that position - offset_stride lies within 0 and number_of_nodes
-            const bool within_bounds = (offset_strides[i] > 0 or position < number_of_nodes + offset_strides[i])
-                                    and (offset_strides[i] < 0 or offset_strides[i] <= position);
+            const bool within_bounds = (offset_strides[i] > 0 || position < number_of_nodes + offset_strides[i])
+                                    && (offset_strides[i] < 0 || offset_strides[i] <= position);
 
             // go in negative offset direction
             if (within_bounds){
                 const uint64_t neg_neighbour = position - offset_strides[i];
                 const uint64_t neg_edge_id = neg_neighbour + i * number_of_nodes;
-                if (valid_edges(neg_edge_id) and !visited(neg_edge_id)){
+                if (valid_edges(neg_edge_id) && !visited(neg_edge_id)){
                     const uint64_t rv = ufd.find_set(neg_neighbour);
                     if (ru != rv){
                         pq.push(std::make_tuple(edge_weights(neg_edge_id), neg_edge_id, position, neg_neighbour));

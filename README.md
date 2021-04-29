@@ -22,7 +22,7 @@ conda install -c cpape -c conda-forge affogato
  - `git clone https://github.com/constantinpape/affogato`
  - `cd affogato`
  - `mkdir -p build && cd build`
- - `cmake ..`
+ - `cmake -DCMAKE_PREFIX_PATH=/path/to/conda/env ..`
  - `make`
 
 ## How can I run Mutex Watershed?

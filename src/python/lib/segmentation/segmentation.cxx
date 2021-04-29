@@ -245,7 +245,9 @@ PYBIND11_MODULE(_segmentation, m)
                                    const xt::pytensor<uint64_t, 1> & nodes){
             const auto & shape = nodes.shape();
             const unsigned ndim = self.ndim();
-            xt::pytensor<int64_t, 2> coordinates = xt::zeros<int64_t>({shape[0], static_cast<int64_t>(ndim)});
+            xt::pytensor<int64_t, 2> coordinates = xt::zeros<int64_t>(
+                {static_cast<int64_t>(shape[0]), static_cast<int64_t>(ndim)}
+            );
 
             for(std::size_t ii = 0; ii < shape[0]; ++ii) {
                 const auto coord = self.get_coordinate(nodes(ii));
@@ -279,7 +281,9 @@ PYBIND11_MODULE(_segmentation, m)
                                                 n_attactive_channels, ignore_label, state);
 
             const int64_t n_edges = state.size();
-            xt::pytensor<uint64_t, 2> edges = xt::zeros<uint64_t>({n_edges, 2L});
+            xt::pytensor<uint64_t, 2> edges = xt::zeros<uint64_t>(
+                {n_edges, static_cast<int64_t>(n_edges)}
+            );
             xt::pytensor<float, 1> weights = xt::zeros<float>({n_edges});
             xt::pytensor<bool, 1> is_attractive = xt::zeros<bool>({n_edges});
 
