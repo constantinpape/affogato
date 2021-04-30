@@ -9,7 +9,7 @@ Affinity based segmentation algorithms:
 **From conda:**
 
 ```
-conda install -c cpape -c conda-forge affogato
+conda install -c conda-forge affogato
 ```
 
 **From source:**
