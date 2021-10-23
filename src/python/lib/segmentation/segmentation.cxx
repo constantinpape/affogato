@@ -219,8 +219,9 @@ PYBIND11_MODULE(_segmentation, m)
     py::class_<GraphType>(m, "MWSGridGraph")
         .def(py::init<const std::vector<std::size_t> &>(), py::arg("shape"))
         .def_property_readonly("n_nodes", &GraphType::n_nodes)
-        .def_property("same_seed_weight", &GraphType::get_same_seed_weight, &GraphType::set_same_seed_weight)
-        .def_property("different_seed_weight", &GraphType::get_different_seed_weight, &GraphType::set_different_seed_weight)
+        .def_property("add_attractive_seed_edges",
+                      &GraphType::get_add_attactive_seed_edges,
+                      &GraphType::set_add_attactive_seed_edges)
 
         //
         // mask functionality
@@ -272,7 +273,9 @@ PYBIND11_MODULE(_segmentation, m)
                                    const xt::pytensor<uint64_t, 1> & nodes){
             const auto & shape = nodes.shape();
             const unsigned ndim = self.ndim();
-            xt::pytensor<int64_t, 2> coordinates = xt::zeros<int64_t>({shape[0], static_cast<int64_t>(ndim)});
+            xt::pytensor<int64_t, 2> coordinates = xt::zeros<int64_t>(
+                {static_cast<int64_t>(shape[0]), static_cast<int64_t>(ndim)}
+            );
 
             for(std::size_t ii = 0; ii < shape[0]; ++ii) {
                 const auto coord = self.get_coordinate(nodes(ii));
@@ -306,7 +309,9 @@ PYBIND11_MODULE(_segmentation, m)
                                                 n_attactive_channels, ignore_label, state);
 
             const int64_t n_edges = state.size();
-            xt::pytensor<uint64_t, 2> edges = xt::zeros<uint64_t>({n_edges, 2L});
+            xt::pytensor<uint64_t, 2> edges = xt::zeros<uint64_t>(
+                {n_edges, static_cast<int64_t>(n_edges)}
+            );
             xt::pytensor<float, 1> weights = xt::zeros<float>({n_edges});
             xt::pytensor<bool, 1> is_attractive = xt::zeros<bool>({n_edges});
 

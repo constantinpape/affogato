@@ -17,8 +17,9 @@ namespace segmentation {
     // merge_semantic_labels: assign two representatives to the same semantic label
     //
 
+    template<class SEMANTIC_LABELING>
     inline bool check_semantic_constraint(const uint64_t ru, const uint64_t rv,
-                                          const auto & semantic_labeling) {
+                                          const SEMANTIC_LABELING & semantic_labeling) {
         int64_t slu = semantic_labeling[ru];
         int64_t slv = semantic_labeling[rv];
 
@@ -29,8 +30,9 @@ namespace segmentation {
 
 
     // set semantic label of 'ru' to 'sl'
+    template<class SEMANTIC_LABELING>
     inline void assign_semantic_label(const uint64_t ru, const int64_t sl,
-                                      auto & semantic_labeling) {
+                                      SEMANTIC_LABELING & semantic_labeling) {
         if(semantic_labeling[ru] < 0){
             semantic_labeling[ru] = sl;
         }
@@ -38,8 +40,9 @@ namespace segmentation {
 
 
     // assign same semantic label to 'ru' and 'rv', assume they don't have different labels
+    template<class SEMANTIC_LABELING>
     inline void merge_semantic_labels(const uint64_t ru, const uint64_t rv,
-                                      auto & semantic_labeling) {
+                                      SEMANTIC_LABELING & semantic_labeling) {
         int64_t slu = semantic_labeling[ru];
         int64_t slv = semantic_labeling[rv];
 
