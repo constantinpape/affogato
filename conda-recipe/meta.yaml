@@ -6,8 +6,7 @@ package:
     {% set tagged_version = tagged_version + '.post' + GIT_DESCRIBE_NUMBER %}
   {% endif %}
   version:
-   0.2.3
-#   {{tagged_version}}
+   {{tagged_version}}
 
 
 source:
@@ -21,12 +20,12 @@ build:
 
 requirements:
   build:
-    - python {{ python }}
+    - python {{PY_VER}}*
     - cmake
     - boost >=1.63
     - xtensor-python
   run:
-    - python {{ python }}
+    - python {{PY_VER}}*
     - numpy # do not need to constrain np version
 
 

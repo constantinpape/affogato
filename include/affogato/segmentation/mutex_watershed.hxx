@@ -262,7 +262,6 @@ namespace segmentation {
         util::export_consecutive_labels(ufd, number_of_nodes, node_labeling);
     }
 
-
     // helper function for mws prim implementation:
     // add all neighbors of given node to the priority queue
     template <class WEIGHT_ARRAY, class VALID_ARRAY, class UFD, class PRIORITY_QUEUE>

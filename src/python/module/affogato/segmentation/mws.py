@@ -110,7 +110,6 @@ def compute_mws_segmentation_from_signed_affinities(signed_affinities, offsets,
     :param signed_affinities: If the image is N-dimensional, this is a N+1 dimensional array of positive and
             negative values (where the first dimension is the "channel" dimension)
     """
-    # TODO: implement long-range edge-probability
     ndim = len(offsets[0])
     assert all(len(off) == ndim for off in offsets)
     assert signed_affinities.shape[0] == len(offsets)

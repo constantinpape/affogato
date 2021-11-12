@@ -1,13 +1,6 @@
 name: build
 
-on:
-  push:
-    branches: [ master, single_linkage ]
-  pull_request:
-    branches: [ master ]
-
-#Previous version:
-#on: [push, pull_request]
+on: [push, pull_request]
 
 jobs:
   test:
