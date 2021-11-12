@@ -1,6 +1,6 @@
 import numpy as np
 
-from ._segmentation import compute_mws_prim_segmentation_impl, compute_mws_segmentation_impl, compute_mws_segmentation_v2_impl
+from ._segmentation import compute_mws_prim_segmentation_impl, compute_mws_segmentation_impl
 from ..affinities import compute_affinities
 
 
@@ -76,11 +76,16 @@ def compute_mws_segmentation(weights, offsets, number_of_attractive_channels,
         masked_weights = np.ma.masked_array(weights, mask=np.logical_not(valid_edges))
         sorted_flat_indices = np.argsort(masked_weights, axis=None)[::-1]
 
+        # Deduce mask of mutex (negative) edges:
+        nb_nodes = np.array(image_shape).prod()
+        mutex_edges = np.ones_like(valid_edges.ravel())
+        mutex_edges[:nb_nodes*number_of_attractive_channels] = False
+
         labels = compute_mws_segmentation_impl(sorted_flat_indices,
-                                               valid_edges.ravel(),
-                                               offsets,
-                                               number_of_attractive_channels,
-                                               image_shape)
+                                                  valid_edges.ravel(),
+                                                  mutex_edges,
+                                                  offsets,
+                                                  image_shape)
     else:
         labels = compute_mws_prim_segmentation_impl(weights.ravel(),
                                                     valid_edges.ravel(),
@@ -128,7 +133,7 @@ def compute_mws_segmentation_from_signed_affinities(signed_affinities, offsets,
     masked_weights = np.ma.masked_array(abs_affinities, mask=np.logical_not(valid_edges))
     sorted_flat_indices = np.argsort(masked_weights, axis=None)[::-1]
 
-    labels = compute_mws_segmentation_v2_impl(sorted_flat_indices,
+    labels = compute_mws_segmentation_impl(sorted_flat_indices,
                                            valid_edges.ravel(),
                                            mutex_edges.ravel(),
                                            offsets,
