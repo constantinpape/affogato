@@ -1,6 +1,10 @@
 name: build
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 jobs:
   test:
@@ -31,14 +35,21 @@ jobs:
           channels: conda-forge
           environment-file: .github/workflows/environment.yaml
           python-version: ${{ matrix.python-version }}
+          use-mamba: true
+          mamba-version: "*"
           auto-activate-base: false
         env:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: true
 
-      - name: Build unix
-        if: matrix.os != 'windows-latest'
+      - name: Build linux
+        if: matrix.os == 'ubuntu-latest'
         shell: bash -l {0}
-        run: .github/workflows/build_linux.sh
+        run: .github/workflows/build_unix.sh
+
+      - name: Build mac
+        if: matrix.os == 'macos-latest'
+        shell: bash -l {0}
+        run: .github/workflows/build_unix.sh
 
       - name: Build win
         if: matrix.os == 'windows-latest'
