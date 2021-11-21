@@ -5,5 +5,8 @@ dependencies:
   - boost-cpp
   - cmake
   - compilers
+  - scipy
+  - h5py
+  - vigra
   - xtensor>=0.21,<0.22
   - xtensor-python>=0.24,<0.25
