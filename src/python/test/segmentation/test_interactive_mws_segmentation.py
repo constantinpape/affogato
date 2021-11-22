@@ -33,34 +33,6 @@ class TestInteractiveMws(unittest.TestCase):
             out = seg[coords]
             self.assertTrue(np.allclose(out, seed_id))
 
-    def test_geojson_parser(self):
-        from affogato.segmentation.interactive_mws import parse_geojson
-        imws = self._make_imws()
-        geojson = {'type': 'FeatureCollection',
-                   'features': [
-                                {'type': 'Feature',
-                                 'geometry': {'type': 'Point',
-                                              'coordinates': [0.1, 1.0]},
-                                 'properties': {'name': '1'}
-                                },
-                                {'type': 'Feature',
-                                 'geometry': {'type': 'LineString',
-                                              'coordinates': [[4., 1.], [5., 2.]]},
-                                 'properties': {'name': '2'}}
-                               ]
-                  }
-        geo_seeds = parse_geojson(geojson)
-        # update seeds from dict
-        imws.update_seeds(geo_seeds)
-        seg = imws()
-        self.assertEqual(seg.shape, self.shape)
-
-        seeds = {1: (np.array([0], dtype='int'), np.array([1], dtype='int')),
-                 2: (np.array([4, 5], dtype='int'), np.array([1, 2], dtype='int'))}
-        for seed_id, coords in seeds.items():
-            out = seg[coords]
-            self.assertTrue(np.allclose(out, seed_id))
-
 
 if __name__ == '__main__':
     unittest.main()
