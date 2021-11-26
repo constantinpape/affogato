@@ -14,9 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # FIXME tests on other os are failing, deactivated for now for development, but needs to be fixed!
-        # os: [macos-latest, windows-latest, ubuntu-latest]
-        os: [ubuntu-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
         python-version: [3.7, 3.8]
 
     steps:
