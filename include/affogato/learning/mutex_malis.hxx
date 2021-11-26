@@ -116,7 +116,8 @@ namespace learning {
         boost::disjoint_sets<uint64_t*, uint64_t*> ufd(&ranks[0], &parents[0]);
 
         // data-structure storing mutex edges
-        typedef std::vector<std::vector<uint64_t>> MutexStorage;
+        typedef boost::container::flat_set<uint64_t> SetType;
+        typedef std::vector<SetType> MutexStorage;
         MutexStorage mutexes(number_of_nodes);
 
         // additional malis datastructures
@@ -195,7 +196,7 @@ namespace learning {
             if(is_mutex) {
                 merge_q.push_back(std::make_pair(u, v));
                 // insert the mutex edge into both mutex edge storages
-                segmentation::insert_mutex(ru, rv, edge_id, mutexes);
+                segmentation::insert_mutex(ru, rv, mutexes);
                 compute_gradient(ru, rv, overlaps, false, true, loss, flat_weights[edge_id], grads[edge_id]);
 
             } else {
@@ -297,7 +298,7 @@ namespace learning {
                 if (!on_boundary){
                     merge_q.push_back(std::make_pair(u, v));
                     // // compute gradient for the mutex edge
-                    segmentation::insert_mutex(ru, rv, edge_id, mutexes);
+                    segmentation::insert_mutex(ru, rv, mutexes);
                     compute_gradient(ru, rv, overlaps, false, true, loss, flat_weights[edge_id], grads[edge_id]);
                     // the computed gradient can be zero if all considered pairs
                     // have only ignore labels
@@ -376,7 +377,7 @@ namespace learning {
             if(is_mutex) {
 
                 // insert the mutex edge into both mutex edge storages
-                segmentation::insert_mutex(ru, rv, edge_id, mutexes);
+                segmentation::insert_mutex(ru, rv, mutexes);
                 compute_gradient(ru, rv, overlaps, true, false, loss, flat_weights[edge_id], grads[edge_id]);
             } else {
 

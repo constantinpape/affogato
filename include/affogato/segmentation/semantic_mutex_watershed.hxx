@@ -104,7 +104,8 @@ namespace segmentation {
         });
 
         // data-structure storing mutex edges
-        typedef std::vector<std::vector<uint64_t>> MutexStorage;
+        typedef boost::container::flat_set<uint64_t> SetType;
+        typedef std::vector<SetType> MutexStorage;
         MutexStorage mutexes(number_of_labels);
 
         // iterate over all edges
@@ -150,7 +151,7 @@ namespace segmentation {
                 if(is_mutex_edge) {
 
                     // insert mutex constraint
-                    insert_mutex(ru, rv, id, mutexes);
+                    insert_mutex(ru, rv, mutexes);
 
                 } else {
 
@@ -231,7 +232,8 @@ namespace segmentation {
         // std::vector<uint64_t> semantic_labeling(number_of_nodes, 0);
 
         // data-structure storing mutex edges
-        typedef std::vector<std::vector<uint64_t>> MutexStorage;
+        typedef boost::container::flat_set<uint64_t> SetType;
+        typedef std::vector<SetType> MutexStorage;
         MutexStorage mutexes(number_of_nodes);
 
         // iterate over all edges
@@ -278,7 +280,7 @@ namespace segmentation {
                 if(is_mutex_edge) {
 
                     // insert the mutex edge into both mutex edge storages
-                    insert_mutex(ru, rv, edge_id, mutexes);
+                    insert_mutex(ru, rv, mutexes);
 
                 } else {
 
