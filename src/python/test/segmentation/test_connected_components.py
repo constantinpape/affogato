@@ -17,7 +17,8 @@ class TestConnectedComponents(unittest.TestCase):
         self.assertEqual(max_label, ccs.max())
 
     # checks are not correct
-    @unittest.expectedFailure
+    # @unittest.expectedFailure
+    @unittest.skip("Segfaults on windows")
     def test_cc_3d(self):
         from affogato.segmentation import connected_components
         shape = (2, 100, 100, 100)
