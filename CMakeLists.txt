@@ -52,7 +52,10 @@ include_directories(${xtensor_INCLUDE_DIRS})
 if(BUILD_PYTHON)
     # fix MacOS issues, see
     # https://github.com/pybind/pybind11/issues/3081#issuecomment-935902332
-    include(FindPythonPyEnv)
+    # does not work on windows
+    if(NOT WIN32)
+        include(FindPythonPyEnv)
+    endif()
     find_package(pybind11 REQUIRED)
     set(PYBIND11_CPP_STANDARD -std=c++14)
     
