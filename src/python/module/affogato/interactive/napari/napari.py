@@ -6,11 +6,9 @@ import h5py
 import napari
 from vispy.color import Colormap
 
+from skimage.segmentation import find_boundaries
 from ...segmentation import InteractiveMWS
 from .mws_with_seeds import mws_with_seeds
-
-# TODO don't use elf functionality
-from elf.segmentation.utils import seg_to_edges
 
 
 class InteractiveNapariMWS:
@@ -164,8 +162,7 @@ class InteractiveNapariMWS:
             viewer.add_image(self.imws.affinities, name='affinities', visible=False)
 
             if self.show_edges:
-                # TODO don't use elf functionality
-                edges = seg_to_edges(seg)
+                edges = find_boundaries(seg)
                 cmap = Colormap([
                     [0., 0., 0., 0.],  # label 0 is transparent
                     [1., 1., 1., 1.]  # label 1 is white (better color?)
@@ -335,7 +332,7 @@ class InteractiveNapariMWS:
         seg_layer.refresh()
 
         if self.show_edges:
-            edges = seg_to_edges(seg)
+            edges = find_boundaries(seg)
             edge_layer = layers['edges']
             edge_layer.data = edges
             edge_layer.refresh()

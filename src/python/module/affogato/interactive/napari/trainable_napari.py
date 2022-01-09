@@ -2,11 +2,21 @@ import os
 import torch
 import torch.multiprocessing as mp
 
-# TODO don't use elf functionality
-from elf.segmentation.utils import normalize_input
-
 from .napari import InteractiveNapariMWS
 from .train_utils import ConcatDataset, DefaultDataset, default_training
+
+
+def normalize_input(input_, eps=1e-7):
+    """ Cast input to float and normalize to range [0, 1]
+
+    Arguments:
+        input_ [np.ndarray] - input tensor to be normalized
+        eps [float] - epsilon for numerical stability (default: 1e-7)
+    """
+    input_ = input_.astype("float32")
+    input_ -= input_.min()
+    input_ /= (input_.max() + eps)
+    return input_
 
 
 # TODO support passing initial pool of training data
