@@ -29,3 +29,5 @@ conda install -c conda-forge affogato
 
 You can follow along with this [colab tutorial](https://github.com/constantinpape/affogato/blob/master/example/MutexWatershed.ipynb)
 The example data is available [here](https://oc.embl.de/index.php/s/sXJzYVK0xEgowOz).
+
+The demo for the interactive mutex watershed can be run with [example/interactive/interactive_napari.py](https://github.com/constantinpape/affogato/blob/master/example/interactive/interactive_napari.py). Exapme data is available [here](https://oc.embl.de/index.php/s/yoBbHp7n2PAMrXm/download?path=%2Fdata&files=data.h5).
