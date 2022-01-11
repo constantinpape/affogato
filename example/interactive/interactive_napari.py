@@ -13,7 +13,7 @@ DEFAULT_OFFSETS = [[-1, 0], [0, -1],
 def interactive_napari(path, raw="raw", prediction="prediction",
                        strides=DEFAULT_STRIDES, offsets=DEFAULT_OFFSETS,
                        z=0):
-    """ Run interactive mutex watershed segmentation for a hdf5 volume
+    """Run interactive mutex watershed segmentation for a hdf5 volume
     with raw data and affinity predictions.
     """
     with h5py.File(path, "r") as f:
