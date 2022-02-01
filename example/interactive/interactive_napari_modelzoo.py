@@ -27,7 +27,7 @@ def interactive_napari(model):
     # NOTE: this will also apply the correct normalization to the data
     with create_prediction_pipeline(bioimageio_model=model) as pp:
         input_ = DataArray(raw, dims=tuple(pp.input_specs[0].axes))
-        affs = pp(input_)[0]
+        affs = pp(input_)[0].values
 
     # strip singelton dimensions and validate
     raw = raw.squeeze()
