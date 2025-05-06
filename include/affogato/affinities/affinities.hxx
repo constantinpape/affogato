@@ -2,7 +2,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "xtensor/xtensor.hpp"
+#include "xtensor.hpp"
 #include "affogato/util.hxx"
 
 #include "boost/functional/hash.hpp"

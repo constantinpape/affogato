@@ -1,5 +1,5 @@
 #include "boost/pending/disjoint_sets.hpp"
-#include "xtensor/xtensor.hpp"
+#include "xtensor.hpp"
 #include "affogato/util.hxx"
 
 

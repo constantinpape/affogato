@@ -2,7 +2,7 @@
 
 #include <random>
 #include <boost/functional/hash.hpp>
-#include "xtensor/xtensor.hpp"
+#include "xtensor.hpp"
 #include "affogato/util.hxx"
 
 

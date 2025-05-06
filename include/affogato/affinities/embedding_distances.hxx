@@ -2,8 +2,9 @@
 #include <unordered_map>
 #include <vector>
 #include <cmath>
+#include <type_traits>
 
-#include "xtensor/xtensor.hpp"
+#include "xtensor.hpp"
 #include "affogato/util.hxx"
 
 

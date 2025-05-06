@@ -1,7 +1,7 @@
 #pragma once
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/container/flat_set.hpp>
-#include "xtensor/xtensor.hpp"
+#include "xtensor.hpp"
 #include "affogato/util.hxx"
 #include <queue>
 #include <functional>
