@@ -1,6 +1,6 @@
 #pragma once
 #include <boost/pending/disjoint_sets.hpp>
-#include "xtensor/xtensor.hpp"
+#include "xtensor.hpp"
 #include <queue>
 #include <functional>
 #include "affogato/segmentation/mutex_watershed.hxx"

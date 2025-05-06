@@ -2,9 +2,9 @@
 
 #include <unordered_map>
 
-#include "xtensor/xarray.hpp"
-#include "xtensor/xadapt.hpp"
-#include "xtensor/xstrided_view.hpp"
+#include "xtensor/containers/xarray.hpp"
+#include "xtensor/containers/xadapt.hpp"
+#include "xtensor/views/xstrided_view.hpp"
 
 
 // overload ostream operator for xindex

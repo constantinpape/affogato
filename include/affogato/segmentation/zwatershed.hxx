@@ -6,8 +6,8 @@
 
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/functional/hash.hpp>
-#include "xtensor/xtensor.hpp"
-#include "xtensor/xarray.hpp"
+#include "xtensor.hpp"
+#include "xtensor/containers/xarray.hpp"
 
 #include "affogato/util.hxx"
 

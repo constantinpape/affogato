@@ -5,8 +5,8 @@
 #include <map>
 
 #include "boost/pending/disjoint_sets.hpp"
-#include "xtensor/xtensor.hpp"
-#include "xtensor/xstrided_view.hpp"
+#include "xtensor.hpp"
+#include "xtensor/views/xstrided_view.hpp"
 #include "affogato/util.hxx"
 
 
