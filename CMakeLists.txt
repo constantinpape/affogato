@@ -37,7 +37,7 @@ option(BUILD_JS "Build javascript bindings with emscripten" OFF)
 find_package(Threads)
 
 # boost
-find_package(Boost 1.63.0 REQUIRED)
+find_package(Boost 1.63.0 CONFIG REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
 # xtensor
@@ -50,20 +50,14 @@ include_directories(${xtensor_INCLUDE_DIRS})
 ###############################
 
 if(BUILD_PYTHON)
-    # fix MacOS issues, see
-    # https://github.com/pybind/pybind11/issues/3081#issuecomment-935902332
-    # does not work on windows
-    if(NOT WIN32)
-        include(FindPythonPyEnv)
-    endif()
-    find_package(pybind11 REQUIRED)
-    set(PYBIND11_CPP_STANDARD -std=c++14)
-    
-    find_package(NUMPY REQUIRED)
-    include_directories(${NUMPY_INCLUDE_DIRS})
+    find_package(Python REQUIRED COMPONENTS NumPy Interpreter Development)
+    include_directories(${Python_NumPy_INCLUDE_DIRS})
     
     find_package(xtensor-python REQUIRED)
     include_directories(${xtensor-python_INCLUDE_DIRS})
+    
+    find_package(pybind11 CONFIG REQUIRED)
+    include_directories(${pybind11_INCLUDE_DIRS})
 endif()
 
 

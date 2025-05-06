@@ -26,11 +26,8 @@ ENDIF()
 SET(PYTHON_MODULE_INSTALL_DIR ${PYTHON_MODULE_INSTALL_DIR}
     CACHE PATH "where to install the affogato python package" FORCE)
 
-# this is the install path relative to CMAKE_INSTALL_PREFIX,
-# use this in INSTALL() commands to get packaging right
-FILE(RELATIVE_PATH PYTHON_MODULE_INSTALL_DIR ${CMAKE_INSTALL_PREFIX} ${PYTHON_MODULE_INSTALL_DIR})
+file(TO_CMAKE_PATH "${Python_SITELIB}" Python_SITELIB)
+# message(STATUS "Python_SITELIB ${Python_SITELIB}")
 
-
-
-install(DIRECTORY ${CMAKE_BINARY_DIR}/python/affogato
-    DESTINATION ${PYTHON_MODULE_INSTALL_DIR})
+install(DIRECTORY "${CMAKE_BINARY_DIR}/python/affogato"
+    DESTINATION ${Python_SITELIB})
