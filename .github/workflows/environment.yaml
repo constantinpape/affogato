@@ -2,7 +2,7 @@ name: affogato-build-env
 channels:
   - conda-forge
 dependencies:
-  - boost-cpp
+  - libboost-devel
   - cmake
   - compilers
   - scipy
