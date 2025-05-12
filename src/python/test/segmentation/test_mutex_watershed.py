@@ -95,8 +95,7 @@ class TestMutexWatershed(unittest.TestCase):
         else:
             edges1 = self.seg2edges_3d(exp)
             edges2 = self.seg2edges_3d(seg)
-        # print(np.isclose(edges1, edges2).sum(), '/', edges1.size)
-        self.assertTrue(np.allclose(edges1, edges2))
+        self.assertTrue((edges1 == edges2).all())
 
     @unittest.skipIf(convolve is None, "Need scipy to compare segmentations")
     def test_mws_consistency(self):
@@ -106,10 +105,10 @@ class TestMutexWatershed(unittest.TestCase):
         weights = np.random.rand(len(offsets), 100, 100)
         labels1 = compute_mws_segmentation(weights, offsets,
                                            number_of_attractive_channels,
-                                           algorithm='kruskal')
+                                           algorithm="kruskal")
         labels2 = compute_mws_segmentation(weights, offsets,
                                            number_of_attractive_channels,
-                                           algorithm='prim')
+                                           algorithm="prim")
         self._check_segmentation(labels1, labels2)
 
     def test_mws_masked(self):
@@ -118,7 +117,7 @@ class TestMutexWatershed(unittest.TestCase):
         offsets = [[-1, 0], [0, -1], [-3, 0], [0, 3], [5, 5]]
 
         weights = np.random.rand(len(offsets), 100, 100)
-        mask = np.ones((100, 100), dtype='bool')
+        mask = np.ones((100, 100), dtype="bool")
         # exclude 10 % of pixel from foreground mask
         coords = np.where(mask)
         n_out = int(len(coords[0]) * .1)
@@ -160,5 +159,5 @@ class TestMutexWatershed(unittest.TestCase):
         self._check_segmentation(ref, seg)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -179,6 +179,7 @@ namespace segmentation {
         const size_t number_of_offsets = offsets.size();
         const size_t ndims = offsets[0].size();
 
+
         // Define helper vector to find pair (u,v) from edge_id:
         std::vector<int64_t> array_stride(ndims);
         int64_t current_stride = 1;
@@ -216,9 +217,6 @@ namespace segmentation {
                 continue;
             }
 
-            // check whether this edge is mutex
-            const bool is_mutex_edge = mutex_edges(edge_id);
-
             // get nodes connected by edge of edge_id
 
             // const auto affCoord_ = xt::unravel_from_strides(edge_id, strides, layout);
@@ -241,6 +239,8 @@ namespace segmentation {
                 continue;
             }
 
+            // check whether this edge is mutex
+            const bool is_mutex_edge = mutex_edges(edge_id);
             if(is_mutex_edge) {
 
                 // insert the mutex edge into both mutex edge storages
@@ -248,7 +248,7 @@ namespace segmentation {
 
             } else {
 
-                ufd.link(u, v);
+                ufd.link(ru, rv);
                 // check  if we have to swap the roots
                 if(ufd.find_set(ru) == rv) {
                     std::swap(ru, rv);
@@ -316,8 +316,7 @@ namespace segmentation {
         // typedef
         typedef std::tuple<float, uint64_t, uint64_t, uint64_t> PQElement;
         auto pq_compare = [](PQElement left, PQElement right) {return std::get<0>(left) < std::get<0>(right);};
-        typedef std::priority_queue<PQElement, std::vector<PQElement>,
-                                    decltype(pq_compare)> EdgePriorityQueue;
+        typedef std::priority_queue<PQElement, std::vector<PQElement>, decltype(pq_compare)> EdgePriorityQueue;
         typedef boost::disjoint_sets<uint64_t*, uint64_t*> NodeUnionFind;
 
         // casts
@@ -393,9 +392,6 @@ namespace segmentation {
                 continue;
             }
 
-            // check whether this edge is mutex via the edge offset
-            const bool is_mutex_edge = edge_id >= number_of_attractive_edges;
-
             // if we already have a mutex, we do not need to do anything
             // (if this is a regular edge, we do not link, if it is a mutex edge
             //  we do not need to insert the redundant mutex constraint)
@@ -403,11 +399,13 @@ namespace segmentation {
                 continue;
             }
 
+            // check whether this edge is mutex via the edge offset
+            const bool is_mutex_edge = edge_id >= number_of_attractive_edges;
             if(is_mutex_edge) {
                 insert_mutex(ru, rv, mutexes);
             } else {
 
-                node_ufd.link(u, v);
+                node_ufd.link(ru, rv);
                 // check  if we have to swap the roots
                 if(node_ufd.find_set(ru) == rv) {
                     std::swap(ru, rv);
