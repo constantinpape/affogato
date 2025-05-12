@@ -129,6 +129,7 @@ namespace segmentation {
             // if we already have a mutex, we do not need to do anything
             // (if this is a regular edge, we do not link, if it is a mutex edge
             //  we do not need to insert the redundant mutex constraint)
+
             if(check_mutex(ru, rv, mutexes)) {
                 continue;
             }
@@ -141,7 +142,7 @@ namespace segmentation {
             } else {
 
                 // link the nodes and merge their mutex constraints
-                ufd.link(u, v);
+                ufd.link(ru, rv);
                 // check  if we have to swap the roots
                 if(ufd.find_set(ru) == rv) {
                     std::swap(ru, rv);
